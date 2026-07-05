@@ -1,0 +1,19 @@
+{
+  "student_id": "你的学号",
+  "password": "你的密码",
+  "base_url": "http://jwgl.jsut.edu.cn",
+  "academic_year": "2025-2026",
+  "semester": "2",
+  "check_interval_minutes": 5,
+  "captcha_max_retries": 5,
+  "notify": {
+    "bark": {
+      "enabled": false,
+      "key": ""
+    },
+    "pushplus": {
+      "enabled": false,
+      "token": ""
+    }
+  }
+}

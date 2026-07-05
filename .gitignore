@@ -1,0 +1,24 @@
+# Config (contains user credentials - NEVER commit real data)
+config.json
+config.local.json
+
+# Sample config reference (safe to commit)
+!config.example.json
+
+# Build artifacts
+dist/
+build/
+*.spec
+
+# User data (real scores, logs, screenshots)
+data/
+*.log
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# OS
+Thumbs.db
+.DS_Store
