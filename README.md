@@ -18,11 +18,11 @@
 
 ### 下载
 
-去 [Releases](https://github.com/your-repo/releases) 下载 `成绩监控.exe`，放任意目录。
+去 [Releases](https://github.com/your-repo/releases) 下载 `default.exe`，放任意目录。
 
 ### 首次运行
 
-**双击 `成绩监控.exe`**，按提示输入：
+**双击 `default.exe`**，按提示输入：
 
 ```
 学号: 2023144106
@@ -49,19 +49,19 @@ Bark Key（手机推送，不填则不通知）:
 
 ### 后续运行
 
-以后直接双击 `成绩监控.exe` 即可，会自动读取已保存的配置。
+以后直接双击 `default.exe` 即可，会自动读取已保存的配置。
 
 ## 使用方法
 
 ### 命令一览
 
 ```bash
-成绩监控.exe                    # 读取配置，持续监控（5分钟间隔）
-成绩监控.exe --once             # 只检查一次
-成绩监控.exe --setup            # 重新配置学号、密码、Bark Key
-成绩监控.exe --interval 10      # 临时改为 10 分钟间隔（不保存）
-成绩监控.exe --visible          # 显示浏览器窗口（调试用）
-成绩监控.exe --student-id 123456 --password xxx    # 临时切换账号
+default.exe                    # 读取配置，持续监控（5分钟间隔）
+default.exe --once             # 只检查一次
+default.exe --setup            # 重新配置学号、密码、Bark Key
+default.exe --interval 10      # 临时改为 10 分钟间隔（不保存）
+default.exe --visible          # 显示浏览器窗口（调试用）
+default.exe --student-id 123456 --password xxx    # 临时切换账号
 ```
 
 ### 从源码运行
