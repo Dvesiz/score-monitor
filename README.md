@@ -1,4 +1,4 @@
-# 🎓 教务成绩监控
+# 🎓 教务成绩监控（目前仅支持IOS）
 
 > 自动监控正方教务系统成绩发布，检测到新成绩时通过 Bark 推送通知到手机。
 
@@ -16,6 +16,11 @@
 
 ## 快速开始
 
+### 获取Bark的key
+
+去App Store下载软件Bark,在首页的第一个网址里，app/之后的内容就是你的设备的key（末尾没有/）
+<img width="1170" height="2532" alt="image" src="https://github.com/user-attachments/assets/2d94c7dd-d33c-4f80-8194-8f189e7c9f8d" />
+
 ### 下载
 
 去 [Releases](https://github.com/your-repo/releases) 下载 `default.exe`，放任意目录。
@@ -25,11 +30,11 @@
 **双击 `default.exe`**，按提示输入：
 
 ```
-学号: 2023144106
+学号: 2021******
 密码: ********
 学年（如 2025-2026）[2025-2026]:
 学期（1 或 2）[2]:
-Bark Key（手机推送，不填则不通知）:
+Bark Key（手机推送，不填则不通知）:*******************
 ```
 
 信息会自动保存到同目录下的 `config.json` 中。
@@ -41,6 +46,7 @@ Bark Key（手机推送，不填则不通知）:
 3. 首次启动时填入，或运行 `成绩监控.exe --setup`
 
 推送效果：
+<img width="1170" height="2532" alt="dfca3d234d51f813842683eca243fc44" src="https://github.com/user-attachments/assets/78d6a671-d38d-4bc4-9e87-9596f4650f65" />
 
 > **🎯 成绩发布 (5 门)**
 > 新成绩:
