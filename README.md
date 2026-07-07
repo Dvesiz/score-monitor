@@ -1,4 +1,4 @@
-# 🎓 教务成绩监控（目前仅支持IOS）
+# 🎓 教务成绩监控
 
 > 自动监控正方教务系统成绩发布，检测到新成绩时通过 Bark 推送通知到手机。
 
@@ -9,10 +9,11 @@
 | **自动登录** | 支持图形验证码 OCR（ddddocr），自动识别并提交 |
 | **成绩查询** | 自动导航到成绩页面，查询指定学年学期 |
 | **智能对比** | 与上次缓存对比，仅在有变化时通知 |
+| **平时分/卷面分** | 从 __VIEWSTATE 自动提取平时分(PSCJ)和卷面分(QMCJ) |
 | **Bark 推送** | 新成绩/成绩更新时通过 Bark 推送到 iOS |
 | **持续监控** | 默认每 5 分钟检查一轮 |
 | **多账号** | 支持命令行参数临时切换账号 |
-| **无需浏览器** | 自动使用系统已安装的 Chrome/Edge，无需额外下载 |
+| **无需下载浏览器** | 自动使用系统已安装的 Chrome/Edge |
 
 ## 快速开始
 
@@ -23,11 +24,11 @@
 
 ### 下载
 
-去 [Releases](https://github.com/your-repo/releases) 下载 `default.exe`，放任意目录。
+去 [Releases](https://github.com/Dvesiz/score-monitor/releases) 下载 `成绩监控.exe`，放任意目录。
 
 ### 首次运行
 
-**双击 `default.exe`**，按提示输入：
+**双击 `成绩监控.exe`**，按提示输入：
 
 ```
 学号: 2021******
@@ -48,10 +49,14 @@ Bark Key（手机推送，不填则不通知）:*******************
 推送效果：
 <img width="1170" height="2532" alt="dfca3d234d51f813842683eca243fc44" src="https://github.com/user-attachments/assets/78d6a671-d38d-4bc4-9e87-9596f4650f65" />
 
-> **🎯 成绩发布 (5 门)**
+> **🎯 成绩更新 (6 门)**
 > 新成绩:
->   专业英语: 94
->   软件测试与质量: 86
+>   专业英语: 94 (平98 卷88)
+>   物理化学: 92 (平85 卷95)
+>   马克思主义基本原理: 86 (平85 卷92)
+>   物理化学实验: 80 (平84 卷77)
+>   数据分析项目实训: 99 (平 卷99)
+>   移动应用开发: 97 (平 卷94)
 
 ### 后续运行
 
@@ -62,12 +67,12 @@ Bark Key（手机推送，不填则不通知）:*******************
 ### 命令一览
 
 ```bash
-default.exe                    # 读取配置，持续监控（5分钟间隔）
-default.exe --once             # 只检查一次
-default.exe --setup            # 重新配置学号、密码、Bark Key
-default.exe --interval 10      # 临时改为 10 分钟间隔（不保存）
-default.exe --visible          # 显示浏览器窗口（调试用）
-default.exe --student-id 123456 --password xxx    # 临时切换账号
+成绩监控.exe                    # 读取配置，持续监控（5分钟间隔）
+成绩监控.exe --once             # 只检查一次
+成绩监控.exe --setup            # 重新配置学号、密码、Bark Key
+成绩监控.exe --interval 10      # 临时改为 10 分钟间隔（不保存）
+成绩监控.exe --visible          # 显示浏览器窗口（调试用）
+成绩监控.exe --student-id 123456 --password xxx    # 临时切换账号
 ```
 
 ### 从源码运行
@@ -88,9 +93,10 @@ python score_monitor.py
 ```
 ├── score_monitor.py       # 主程序
 ├── build_exe.bat          # PyInstaller 打包脚本
-├── config.example.json    # 配置模板（供参考）
 ├── .gitignore
 ├── README.md
+├── data/
+│   └── scores_cache.json  # 成绩缓存（自动生成）
 └── dist/
     └── 成绩监控.exe        # 编译后的可执行文件
 ```
@@ -103,11 +109,13 @@ python score_monitor.py
 ============================================================
           📋 首次成绩快照
 ============================================================
-  时间: 2026-07-06 01:18:30
+  时间: 2026-07-08 00:52:27
 
-  📚 新出成绩 (5 门):
-    ✅ 专业英语: 94 分
-    ✅ 软件测试与质量: 86 分
+  📚 当前成绩 (8 门):
+    ✅ 专业英语: 94 [平98 卷88]
+    ✅ 物理化学: 92 [平85 卷95]
+    ✅ 物理化学实验: 80 [平84 卷77]
+    ✅ 马克思主义基本原理: 86 [平85 卷92]
     ...
 ============================================================
 ```
@@ -123,11 +131,10 @@ pip install pyinstaller
 # 打包（含 ddddocr 的 ONNX 模型文件）
 pyinstaller --onefile --console --name "成绩监控" ^
   --hidden-import=httpx ^
-  --hidden-import=playwright._impl._driver ^
   --hidden-import=playwright.async_api ^
   --hidden-import=bs4 ^
   --hidden-import=lxml ^
-  --collect-data ddddocr ^
+  --collect-all ddddocr ^
   --add-data "config.json;." ^
   score_monitor.py
 ```
@@ -148,7 +155,11 @@ pyinstaller --onefile --console --name "成绩监控" ^
 
 ### 缓存
 
-成绩以 `课程名称 → {分数, 学分, 绩点}` 格式缓存到 `data/scores_cache.json`，重启进程不丢失。
+成绩以 `课程名称 → {分数, 学分, 绩点, 平时分, 卷面分}` 格式缓存到 `data/scores_cache.json`，重启进程不丢失。
+
+### VIEWSTATE 解析
+
+成绩页面使用 ASP.NET __VIEWSTATE 存储数据，程序从成绩查询页面的 iframe 中获取完整 VIEWSTATE（约 30KB），解码并提取每门课程的平时分(PSCJ)和卷面分(QMCJ)，与 HTML 表格中的总成绩合并显示。
 
 ## 常见问题
 
