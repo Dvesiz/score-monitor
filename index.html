@@ -122,12 +122,23 @@ nav{position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:100;widt
 .download-card .btn:hover i{background:rgba(255,255,255,.2);transform:translate(2px,-1px)}
 .download-note{text-align:center;margin-top:20px;font-size:13px;color:rgba(255,255,255,.3);grid-column:1/-1}
 
-/* ===== USAGE ===== */
-.usage-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;counter-reset:step}
-.usage-step{text-align:center;padding:32px 24px;border-radius:20px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);position:relative}
-.usage-step .step-num{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;margin:0 auto 16px;background:rgba(129,140,248,.15);color:#a5b4fc;border:1px solid rgba(129,140,248,.2)}
-.usage-step h4{font-size:16px;font-weight:600;margin-bottom:8px}
-.usage-step p{font-size:13px;color:rgba(255,255,255,.45);line-height:1.6}
+/* ===== TUTORIAL ===== */
+.tutorial-steps{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:32px}
+.tutorial-step{border-radius:20px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);padding:32px;transition:all .5s cubic-bezier(.32,.72,0,1)}
+.tutorial-step:hover{transform:translateY(-2px);border-color:rgba(129,140,248,.12)}
+.tutorial-step-header{display:flex;align-items:center;gap:16px;margin-bottom:16px}
+.tutorial-step-num{display:inline-flex;align-items:center;padding:4px 14px;border-radius:9999px;background:rgba(129,140,248,.12);border:1px solid rgba(129,140,248,.15);font-size:11px;font-weight:600;color:#a5b4fc;letter-spacing:.08em;white-space:nowrap}
+.tutorial-step-header h3{font-size:19px;font-weight:600;letter-spacing:-.02em}
+.tutorial-step-body p{font-size:14px;color:rgba(255,255,255,.55);line-height:1.7;margin-bottom:12px}
+.tutorial-step-body p:last-child{margin-bottom:0}
+.tutorial-step-body code{color:#a5b4fc;font-size:13px;font-family:'Plus Jakarta Sans',monospace}
+.tutorial-ol{display:flex;flex-direction:column;gap:8px;padding-left:20px;margin-bottom:12px;font-size:14px;color:rgba(255,255,255,.55);line-height:1.7}
+.tutorial-ol li::marker{color:#818cf8}
+.tutorial-note{display:flex;align-items:flex-start;gap:10px;padding:12px 16px;border-radius:12px;background:rgba(129,140,248,.06);border:1px solid rgba(129,140,248,.1);font-size:13px;color:rgba(255,255,255,.5);line-height:1.6;margin-top:12px}
+.tutorial-note i{font-size:16px;color:#818cf8;margin-top:2px;flex-shrink:0}
+.tutorial-warning{display:flex;align-items:flex-start;gap:10px;padding:14px 16px;border-radius:12px;background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.12);font-size:13px;color:rgba(255,255,255,.6);line-height:1.6;margin-bottom:16px}
+.tutorial-warning i{font-size:16px;color:#fbbf24;margin-top:2px;flex-shrink:0}
+.tutorial-code-block{display:flex;flex-direction:column;gap:4px;padding:16px 20px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);font-family:'Plus Jakarta Sans',monospace;font-size:13px;color:rgba(255,255,255,.5);margin-bottom:12px;line-height:1.8}
 
 /* ===== COMMANDS ===== */
 .commands-section{background:rgba(255,255,255,.02);border-top:1px solid rgba(255,255,255,.04);border-bottom:1px solid rgba(255,255,255,.04)}
@@ -159,7 +170,6 @@ footer{border-top:1px solid rgba(255,255,255,.06);padding:48px 0 32px}
 @media(max-width:900px){
   .features-grid{grid-template-columns:repeat(6,1fr);gap:16px}
   .feature-card{grid-column:span 6 !important}
-  .usage-steps{grid-template-columns:1fr;gap:16px}
   .screenshots-grid{grid-template-columns:1fr}
   .download-grid{grid-template-columns:1fr}
   .command-grid{grid-template-columns:1fr}
@@ -206,7 +216,7 @@ footer{border-top:1px solid rgba(255,255,255,.06);padding:48px 0 32px}
     <ul class="nav-links" id="navLinks">
       <li><a href="#features">功能</a></li>
       <li><a href="#screenshots">预览</a></li>
-      <li><a href="#usage">使用</a></li>
+      <li><a href="#usage">教程</a></li>
       <li><a href="#download">下载</a></li>
     </ul>
     <a href="https://github.com/Dvesiz/score-monitor/releases/latest/download/default.exe" class="nav-cta" target="_blank" rel="noopener">立即下载</a>
@@ -332,51 +342,104 @@ footer{border-top:1px solid rgba(255,255,255,.06);padding:48px 0 32px}
   </div>
 </section>
 
-<!-- ===== COMMANDS ===== -->
+<!-- ===== TUTORIAL ===== -->
 <section class="section commands-section" id="usage">
   <div class="container">
     <div class="section-header reveal">
-      <div class="section-tag"><i class="ri-terminal-line"></i> 命令一览</div>
-      <h2>灵活运行</h2>
-      <p>多种运行模式，适应不同使用场景。</p>
+      <div class="section-tag"><i class="ri-book-open-line"></i> 图文教程</div>
+      <h2>四步上手</h2>
+      <p>下载即用，无需复杂配置。</p>
     </div>
 
-    <div class="command-grid">
-      <div class="command-item reveal reveal-delay-1"><code>default.exe</code><span class="cmd-desc">持续监控（5 分钟间隔）</span></div>
-      <div class="command-item reveal reveal-delay-1"><code>default.exe --once</code><span class="cmd-desc">只检查一次</span></div>
-      <div class="command-item reveal reveal-delay-2"><code>default.exe --setup</code><span class="cmd-desc">重新配置账号信息</span></div>
-      <div class="command-item reveal reveal-delay-2"><code>default.exe --interval 10</code><span class="cmd-desc">临时改为 10 分钟间隔</span></div>
-      <div class="command-item reveal reveal-delay-3"><code>default.exe --visible</code><span class="cmd-desc">显示浏览器窗口（调试）</span></div>
-      <div class="command-item reveal reveal-delay-3"><code>default.exe --student-id ...</code><span class="cmd-desc">临时切换账号</span></div>
+    <div class="tutorial-steps">
+      <!-- Step 1: 下载 -->
+      <div class="tutorial-step reveal reveal-delay-1">
+        <div class="tutorial-step-header">
+          <span class="tutorial-step-num">Step 1</span>
+          <h3>下载程序</h3>
+        </div>
+        <div class="tutorial-step-body">
+          <p>去 <a href="https://github.com/Dvesiz/score-monitor/releases" target="_blank" rel="noopener" style="color:#a5b4fc;text-decoration:underline">GitHub Releases</a> 下载 <code>default.exe</code>，放到任意目录。</p>
+          <div class="tutorial-note">
+            <i class="ri-information-line"></i>
+            <span><strong>提示：</strong>也可从上方下载按钮直接下载最新版本。</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: Bark Key -->
+      <div class="tutorial-step reveal reveal-delay-2">
+        <div class="tutorial-step-header">
+          <span class="tutorial-step-num">Step 2</span>
+          <h3>获取 Bark Key（可选）</h3>
+        </div>
+        <div class="tutorial-step-body">
+          <p>如果需要手机推送通知：</p>
+          <ol class="tutorial-ol">
+            <li>App Store 搜索 <strong>Bark</strong> 并安装</li>
+            <li>打开 Bark，首页网址 <code>app/</code> 之后的内容就是你的设备 Key（末尾不带 <code>/</code>）</li>
+          </ol>
+          <div class="tutorial-note">
+            <i class="ri-mac-line"></i>
+            <span>不填 Bark Key 也能正常使用，成绩会在程序内显示。</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: 首次运行 -->
+      <div class="tutorial-step reveal reveal-delay-3">
+        <div class="tutorial-step-header">
+          <span class="tutorial-step-num">Step 3</span>
+          <h3>首次运行</h3>
+        </div>
+        <div class="tutorial-step-body">
+          <div class="tutorial-warning">
+            <i class="ri-error-warning-line"></i>
+            <span><strong>密码第一次必须输入正确。</strong>登录失败会自动重试，但重试 5 次后账户可能被锁定。建议先在浏览器确认密码正确再使用。</span>
+          </div>
+          <p>双击 <code>default.exe</code>，按提示输入：</p>
+          <div class="tutorial-code-block">
+            <span>学号: 2021******</span>
+            <span>密码: ********</span>
+            <span>学年（如 2025-2026）[2025-2026]:</span>
+            <span>学期（1 或 2）[2]:</span>
+            <span>Bark Key（手机推送，不填则不通知）:*******************</span>
+          </div>
+          <p>信息会自动保存到同目录下的 <code>config.json</code> 中，后续无需重复输入。</p>
+        </div>
+      </div>
+
+      <!-- Step 4: 后续运行 -->
+      <div class="tutorial-step reveal reveal-delay-4">
+        <div class="tutorial-step-header">
+          <span class="tutorial-step-num">Step 4</span>
+          <h3>后续运行</h3>
+        </div>
+        <div class="tutorial-step-body">
+          <p>以后直接双击 <code>default.exe</code> 即可，程序自动读取已保存的配置，开始持续监控。</p>
+          <p>首次运行会建立成绩缓存快照，不会推送通知。后续检测到新成绩或成绩更新时才会提醒。</p>
+        </div>
+      </div>
     </div>
   </div>
 </section>
 
-<!-- ===== USAGE STEPS ===== -->
-<section class="section">
+<!-- ===== COMMANDS ===== -->
+<section class="section" id="commands">
   <div class="container">
     <div class="section-header reveal">
-      <div class="section-tag"><i class="ri-rocket-2-line"></i> 快速开始</div>
-      <h2>三步上手</h2>
-      <p>下载即用，无需复杂配置。</p>
+      <div class="section-tag"><i class="ri-terminal-line"></i> 高级用法</div>
+      <h2>命令参考</h2>
+      <p>多种运行模式，适应不同使用场景。</p>
     </div>
 
-    <div class="usage-steps">
-      <div class="usage-step reveal reveal-delay-1">
-        <div class="step-num">1</div>
-        <h4>下载程序</h4>
-        <p>从 Releases 下载 <code style="color:#a5b4fc">default.exe</code>，放任意目录</p>
-      </div>
-      <div class="usage-step reveal reveal-delay-2">
-        <div class="step-num">2</div>
-        <h4>首次运行</h4>
-        <p>双击运行，按提示输入学号、密码、学年学期和 Bark Key</p>
-      </div>
-      <div class="usage-step reveal reveal-delay-3">
-        <div class="step-num">3</div>
-        <h4>自动监控</h4>
-        <p>信息自动保存，后续双击即可开始持续监控</p>
-      </div>
+    <div class="command-grid">
+      <div class="command-item reveal reveal-delay-1"><code>default.exe</code><span class="cmd-desc">持续监控（默认 5 分钟间隔）</span></div>
+      <div class="command-item reveal reveal-delay-1"><code>default.exe --once</code><span class="cmd-desc">只检查一次，然后退出</span></div>
+      <div class="command-item reveal reveal-delay-2"><code>default.exe --setup</code><span class="cmd-desc">重新配置学号、密码、Bark Key</span></div>
+      <div class="command-item reveal reveal-delay-2"><code>default.exe --interval 10</code><span class="cmd-desc">临时改为 10 分钟间隔（不保存）</span></div>
+      <div class="command-item reveal reveal-delay-3"><code>default.exe --visible</code><span class="cmd-desc">显示浏览器窗口（调试用）</span></div>
+      <div class="command-item reveal reveal-delay-3"><code>default.exe --student-id 123456 --password xxx</code><span class="cmd-desc">临时切换账号</span></div>
     </div>
   </div>
 </section>
