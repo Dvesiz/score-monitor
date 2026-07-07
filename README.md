@@ -47,7 +47,8 @@ Bark Key（手机推送，不填则不通知）:*******************
 3. 首次启动时填入，或运行 `成绩监控.exe --setup`
 
 推送效果：
-<img width="1170" height="2532" alt="dfca3d234d51f813842683eca243fc44" src="https://github.com/user-attachments/assets/78d6a671-d38d-4bc4-9e87-9596f4650f65" />
+<img width="1170" height="2532" alt="c06c266feaa7c7ae95843c67290fcd98" src="https://github.com/user-attachments/assets/b3ee0cbf-d3b6-458c-bc95-057b03adda5e" />
+
 
 > **🎯 成绩更新 (6 门)**
 > 新成绩:
