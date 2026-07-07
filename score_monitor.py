@@ -20,12 +20,15 @@
 """
 
 import asyncio
+import base64
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import logging
+import zlib
 import argparse
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -349,6 +352,16 @@ class Notifier:
         self.config = config
 
     @staticmethod
+    def _score_detail(info: dict) -> str:
+        """补充平时分/卷面分显示"""
+        parts = []
+        if info.get("pscj"):
+            parts.append(f"平{info['pscj']}")
+        if info.get("qmcj"):
+            parts.append(f"卷{info['qmcj']}")
+        return f" ({' '.join(parts)})" if parts else ""
+
+    @staticmethod
     def console(title: str, new_courses: dict, updated_courses: dict):
         """打印带 Emoji 的控制台通知"""
         sep = "=" * 60
@@ -361,7 +374,8 @@ class Notifier:
         if new_courses:
             lines.append(f"\n  📚 新出成绩 ({len(new_courses)} 门):")
             for name, info in new_courses.items():
-                lines.append(f"    ✅ {name}: {info.get('score', '?')} 分")
+                detail = Notifier._score_detail(info)
+                lines.append(f"    ✅ {name}: {info.get('score', '?')} 分{detail}")
         if updated_courses:
             lines.append(f"\n  🔄 成绩更新 ({len(updated_courses)} 门):")
             for name, (old, new) in updated_courses.items():
@@ -716,7 +730,46 @@ class ScoreMonitor:
 
         # ---- 解析：从正确的 iframe 里找 ----
         result = await self._parse_table(query_frame)
+
+        # ---- 额外解析 __VIEWSTATE 获取平时分/卷面分 ----
         if result:
+            # 从主页面和 iframe 找最长 VIEWSTATE
+            viewstate_b64 = ""
+            seen = set()
+            for label, src in [("主页面", page), ("iframe", query_frame)]:
+                if id(src) in seen:
+                    continue
+                seen.add(id(src))
+                try:
+                    vs = await src.evaluate("""() => {
+                        const el = document.getElementById('__VIEWSTATE')
+                            || document.querySelector('input[name="__VIEWSTATE"]')
+                            || document.querySelector('input[type="hidden"][name*="VIEWSTATE"]');
+                        return el ? el.value : '';
+                    }""")
+                    if vs:
+                        logger.info(f"📐 {label} VIEWSTATE: {len(vs)} 字符")
+                        if len(vs) > len(viewstate_b64):
+                            viewstate_b64 = vs
+                except Exception as e:
+                    logger.info(f"ℹ️ {label} evaluate 异常: {e}")
+
+            if viewstate_b64:
+                logger.info(f"✅ 使用最长 VIEWSTATE ({len(viewstate_b64)} 字符)")
+                if len(viewstate_b64) > 100:
+                    try:
+                        vs_scores = self._parse_viewstate_scores(viewstate_b64)
+                        if vs_scores:
+                            self._merge_viewstate_scores(result, vs_scores)
+                        else:
+                            logger.info("⚠️ VIEWSTATE 解析结果为空，正则或字段索引可能不匹配")
+                    except Exception as e:
+                        logger.info(f"⚠️ VIEWSTATE 解析异常: {e}")
+                else:
+                    logger.info(f"⚠️ VIEWSTATE 仅 {len(viewstate_b64)} 字符，不含成绩数据")
+            else:
+                logger.info("⚠️ 未找到 __VIEWSTATE 元素")
+
             logger.info(f"从 frame 解析到 {len(result)} 条成绩")
             return result
 
@@ -726,6 +779,20 @@ class ScoreMonitor:
                 continue
             result = await self._parse_table(f)
             if result:
+                # VIEWSTATE 从主页面读取
+                try:
+                    vs = await page.evaluate("""() => {
+                        const el = document.getElementById('__VIEWSTATE')
+                            || document.querySelector('input[name="__VIEWSTATE"]')
+                            || document.querySelector('input[type="hidden"][name*="VIEWSTATE"]');
+                        return el ? el.value : '';
+                    }""")
+                    if vs:
+                        vs_scores = self._parse_viewstate_scores(vs)
+                        if vs_scores:
+                            self._merge_viewstate_scores(result, vs_scores)
+                except Exception:
+                    pass
                 logger.info(f"从 frame[{f.url[:30]}] 解析到 {len(result)} 条成绩")
                 return result
 
@@ -817,6 +884,125 @@ class ScoreMonitor:
         return scores
 
     # --------------------------------------------------------
+    # VIEWSTATE 解析（提取平时分 PSCJ / 卷面分 QMCJ）
+    # --------------------------------------------------------
+    def _parse_viewstate_scores(self, viewstate_b64: str) -> list:
+        """
+        解码 __VIEWSTATE（ASP.NET LosFormatter 文本格式），
+        提取每门课的平时分(PSCJ)、卷面分(QMCJ)和综合成绩(CJ)。
+
+        VIEWSTATE 行数据结构（29个字段）:
+            t<;l<i<0>..i<28>;>;l<t<F0>;t<F1>;...t<F28>;>;>
+        每个字段 F_i 格式:
+            t<p<p<l<Text;>;l<VALUE;>>;>;;>
+        字段索引:
+            [3]  = 课程名称
+            [9]  = PSCJ (平时成绩)
+            [11] = QMCJ (卷面成绩)
+            [14] = CJ  (综合成绩)
+        """
+        if not viewstate_b64:
+            return []
+
+        # ------ 1. Base64 解码 ------
+        text = None
+        raw = None
+        try:
+            raw = base64.b64decode(viewstate_b64)
+            text = raw.decode('utf-8', errors='replace')
+        except Exception:
+            pass
+
+        # 如果解码后没有预期文本结构，尝试 zlib 解压
+        if text and ('t<' not in text or len(text) < 50):
+            try:
+                decompressed = zlib.decompress(raw)
+                text = decompressed.decode('utf-8', errors='replace')
+            except Exception:
+                pass
+
+        if not text or 't<' not in text:
+            logger.debug("VIEWSTATE 解码后未找到文本格式数据")
+            return []
+
+        # ------ 2. 提取所有字段值 ------
+        # 每个字段: t<p<p<l<Text;>;l<VALUE;>>;>;;>
+        # 捕获 VALUE 在 ;l< 和 下一个 ;/> 之间的文本
+        field_pat = re.compile(r't<p<p<l<[^;]*;>;l<([^;>]*)')
+        all_vals = [m.group(1).strip() for m in field_pat.finditer(text)]
+        if not all_vals:
+            logger.debug("VIEWSTATE 正则未匹配到字段")
+            return []
+
+        # ------ 3. 按每行 29 个字段分组 ------
+        ROW_FIELDS = 29
+        results = []
+        for i in range(0, len(all_vals), ROW_FIELDS):
+            if i + ROW_FIELDS > len(all_vals):
+                break
+            row = all_vals[i:i + ROW_FIELDS]
+
+            # 字段分析（基于调试输出）:
+            # [7]=学年 [8]=学期 [9]=课程代码 [10]=课程名称
+            # [11]=类别(考查/考试) [13]=学分 [14]=绩点
+            # [15]=平时分? [17]=卷面分? [19]=总成绩
+            course_name = row[10].strip() if len(row) > 10 else ''
+            # 跳过页眉行（含学号信息）和空行
+            if not course_name or course_name in ('', '&nbsp\\', '&nbsp;') or len(course_name) < 2:
+                continue
+            # 还要跳过包含"学号信息"或"查询条件"的页眉行
+            is_header = len(row) > 3 and ('学号' in row[3]) or (len(row) > 5 and '查询条件' in row[5])
+            if is_header:
+                continue
+
+            def _clean(v: str) -> str:
+                """清理 VIEWSTATE 中的空白占位符"""
+                v = v.strip()
+                return '' if v in ('', '&nbsp\\', '&nbsp;', '&nbsp', '\\') else v
+
+            entry = {
+                '课程名称': course_name,
+                '成绩': _clean(row[19]) if len(row) > 19 else '',
+                'PSCJ': _clean(row[15]) if len(row) > 15 else '',
+                'QMCJ': _clean(row[17]) if len(row) > 17 else '',
+            }
+            results.append(entry)
+
+        if results:
+            logger.info(f"📊 VIEWSTATE 解析到 {len(results)} 门课程")
+            for r in results:
+                logger.info(f"  {r['课程名称']}: CJ={r['成绩']}, PSCJ={r['PSCJ']}, QMCJ={r['QMCJ']}")
+
+        return results
+
+    def _merge_viewstate_scores(self, html_scores: list, vs_scores: list):
+        """
+        将 VIEWSTATE 中的 PSCJ/QMCJ 合并到 HTML 解析结果中。
+        以课程名称为匹配键。
+        """
+        vs_map = {}
+        for vs in vs_scores:
+            name = vs.get('课程名称', '')
+            if name:
+                vs_map[name] = vs
+
+        matched = 0
+        for item in html_scores:
+            name = item.get('课程名称', '') or item.get('课程', '')
+            if name in vs_map:
+                vs = vs_map[name]
+                if vs.get('PSCJ'):
+                    item['PSCJ'] = vs['PSCJ']
+                if vs.get('QMCJ'):
+                    item['QMCJ'] = vs['QMCJ']
+                if not item.get('成绩') and vs.get('成绩'):
+                    item['成绩'] = vs['成绩']
+                matched += 1
+
+        if matched:
+            logger.info(f"✅ 已合并 {matched} 门课程的平时分/卷面分")
+
+    # --------------------------------------------------------
     # 对比 & 通知
     # --------------------------------------------------------
     def _normalize(self, raw: list) -> dict:
@@ -840,7 +1026,15 @@ class ScoreMonitor:
             )
             credits = item.get("学分", item.get("学　　分", ""))
             gpa = item.get("绩点", item.get("学分绩点", ""))
-            norm[name] = {"score": score, "credits": credits, "gpa": gpa}
+            pscj = item.get("PSCJ", "")
+            qmcj = item.get("QMCJ", "")
+            norm[name] = {
+                "score": score,
+                "credits": credits,
+                "gpa": gpa,
+                "pscj": pscj,
+                "qmcj": qmcj,
+            }
         return norm
 
     def _compare_and_notify(self, raw_scores: list):
@@ -862,7 +1056,9 @@ class ScoreMonitor:
             else:
                 title += f" ({len(current)} 门)"
             parts = ["新成绩:"]
-            parts.extend([f"  {n}: {d['score']}" for n, d in current.items()])
+            for n, d in current.items():
+                detail = Notifier._score_detail(d)
+                parts.append(f"  {n}: {d['score']}{detail}")
             body = "\n".join(parts)
             bark_task = asyncio.ensure_future(self.notifier.bark(title, body))
             pushplus_task = asyncio.ensure_future(self.notifier.pushplus(title, body))
@@ -885,18 +1081,26 @@ class ScoreMonitor:
                 Notifier.console(title, new, updated)
 
                 for name, info in new.items():
-                    logger.info(f"[新增] {name}: {info['score']}")
-                for name, (o, n) in updated.items():
-                    logger.info(f"[更新] {name}: {o}→{n}")
+                    detail = Notifier._score_detail(info)
+                    logger.info(f"[新增] {name}: {info['score']}{detail}")
+                for name, (o, n_) in updated.items():
+                    info = current.get(name, {})
+                    detail = Notifier._score_detail(info)
+                    logger.info(f"[更新] {name}: {o}→{n_}{detail}")
 
                 # 异步推送
                 parts = []
                 if new:
                     parts.append("新成绩:")
-                    parts.extend([f"  {n}: {d['score']}" for n, d in new.items()])
+                    for n, d in new.items():
+                        detail = Notifier._score_detail(d)
+                        parts.append(f"  {n}: {d['score']}{detail}")
                 if updated:
                     parts.append("成绩更新:")
-                    parts.extend([f"  {n}: {o}→{n_}" for n, (o, n_) in updated.items()])
+                    for n, (o, n_) in updated.items():
+                        info = current.get(n, {})
+                        detail = Notifier._score_detail(info)
+                        parts.append(f"  {n}: {o}→{n_}{detail}")
                 body = "\n".join(parts)
                 bark_task = asyncio.ensure_future(self.notifier.bark(title, body))
                 pushplus_task = asyncio.ensure_future(self.notifier.pushplus(title, body))
@@ -965,7 +1169,12 @@ class ScoreMonitor:
                 for s in scores[:10]:
                     name = s.get("课程名称", s.get("课程", "?"))
                     sc = s.get("成绩", s.get("最终成绩", "?"))
-                    logger.info(f"  {name}: {sc}")
+                    pscj = s.get("PSCJ", "")
+                    qmcj = s.get("QMCJ", "")
+                    detail = ""
+                    if pscj or qmcj:
+                        detail = f" [平{pscj} 卷{qmcj}]"
+                    logger.info(f"  {name}: {sc}{detail}")
                 if len(scores) > 10:
                     logger.info(f"  ... 还有 {len(scores)-10} 门")
             else:
@@ -1046,6 +1255,7 @@ async def main():
     parser.add_argument("--year", help="学年，如 2025-2026（覆盖 config.json）")
     parser.add_argument("--semester", type=str, help="学期 1 或 2（覆盖 config.json）")
     parser.add_argument("--bark-key", help="Bark 推送 Key")
+    parser.add_argument("--pushplus-token", help="PushPlus Token（微信推送）")
     parser.add_argument("--setup", action="store_true", help="重新配置账号信息")
     args = parser.parse_args()
 
@@ -1066,6 +1276,9 @@ async def main():
     if args.bark_key:
         config.bark_key = args.bark_key
         config.bark_enabled = True
+    if args.pushplus_token:
+        config.pushplus_token = args.pushplus_token
+        config.pushplus_enabled = True
 
     # 交互式配置：首次使用或 --setup
     if args.setup or not config.student_id or not config.password:
@@ -1095,10 +1308,18 @@ async def main():
             config.bark_key = bk
             config.bark_enabled = True
         elif config.bark_key:
-            # 保持已有 key
             pass
         else:
             config.bark_enabled = False
+
+        pp = input(f"PushPlus Token（微信推送，不填则不通知）[{config.pushplus_token or ''}]: ").strip()
+        if pp:
+            config.pushplus_token = pp
+            config.pushplus_enabled = True
+        elif config.pushplus_token:
+            pass
+        else:
+            config.pushplus_enabled = False
 
         print()
         config.save()
