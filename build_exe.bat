@@ -14,10 +14,10 @@ echo.
 
 pyinstaller --onefile --console --name "成绩监控" ^
     --hidden-import=httpx ^
-    --hidden-import=playwright._impl._driver ^
     --hidden-import=playwright.async_api ^
     --hidden-import=bs4 ^
     --hidden-import=lxml ^
+    --collect-all ddddocr ^
     --add-data "config.json;." ^
     --icon NONE ^
     score_monitor.py
