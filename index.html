@@ -3,246 +3,370 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>教务成绩监控 — Score Monitor</title>
+<title>Score Monitor — 教务成绩监控</title>
 <meta name="description" content="自动监控正方教务系统成绩发布，检测到新成绩时通过 Bark 推送通知到手机。支持自动登录、验证码OCR、智能对比、持续监控。">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.6.0/fonts/remixicon.min.css">
-
 <style>
-/* ===== RESET & BASE ===== */
+/* ===== TOKENS ===== */
+:root{
+  --bg1:#08051a;
+  --bg2:#0d0828;
+  --surface:#14103a;
+  --surface2:#1c1648;
+  --border:rgba(255,255,255,.04);
+  --border-hover:rgba(34,211,238,.12);
+  --text1:#f1f5f9;
+  --text2:rgba(255,255,255,.38);
+  --text3:rgba(255,255,255,.16);
+  --accent:#f59e0b;
+  --accent-bg:rgba(245,158,11,.06);
+  --accent-border:rgba(245,158,11,.12);
+  --glow:rgba(245,158,11,.04);
+  --glow-strong:rgba(245,158,11,.08);
+  --cyan:#22d3ee;
+  --fuchsia:#d946ef;
+  --violet:#8b5cf6;
+}
+
+/* ===== RESET ===== */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth;font-size:16px}
-body{font-family:'Plus Jakarta Sans',sans-serif;background:#050505;color:#fff;overflow-x:hidden;line-height:1.6;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+html{scroll-behavior:smooth;-webkit-font-smoothing:antialiased}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg1);color:var(--text1);overflow-x:hidden;line-height:1.6}
 img{max-width:100%;height:auto;display:block}
 a{color:inherit;text-decoration:none}
 
-/* ===== NOISE OVERLAY ===== */
-body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;opacity:.035;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");background-repeat:repeat;background-size:256px}
+/* ===== NOISE ===== */
+body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;opacity:.015;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");background-size:180px}
 
-/* ===== MESH GRADIENT BG ===== */
-.bg-mesh{position:fixed;inset:0;z-index:-1;overflow:hidden}
-.bg-mesh .orb{position:absolute;border-radius:50%;filter:blur(120px);opacity:.3}
-.bg-mesh .orb:nth-child(1){width:600px;height:600px;top:-200px;right:-100px;background:radial-gradient(circle,rgba(99,102,241,.35),transparent 70%)}
-.bg-mesh .orb:nth-child(2){width:500px;height:500px;bottom:-150px;left:-100px;background:radial-gradient(circle,rgba(168,85,247,.25),transparent 70%)}
-.bg-mesh .orb:nth-child(3){width:400px;height:400px;top:40%;left:50%;transform:translate(-50%,-50%);background:radial-gradient(circle,rgba(14,165,233,.15),transparent 70%)}
+/* ===== AMBIENT BG ===== */
+.bg-layer{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
+.bg-grid{position:absolute;inset:0;opacity:.35;background-image:linear-gradient(rgba(255,255,255,.01) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.01) 1px,transparent 1px);background-size:48px 48px}
+.bg-orb{position:absolute;border-radius:50%;filter:blur(120px);animation:orbFloat 35s ease-in-out infinite;will-change:transform}
+@keyframes orbFloat{0%,100%{transform:translate(0,0) scale(1)}25%{transform:translate(50px,-40px) scale(1.06)}50%{transform:translate(-30px,50px) scale(.94)}75%{transform:translate(40px,30px) scale(1.03)}}
 
 /* ===== UTILITY ===== */
-.container{max-width:1200px;margin:0 auto;padding:0 24px}
-.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.container{max-width:1200px;margin:0 auto;padding:0 32px}
+.section{padding:140px 0}
+.section-header{margin-bottom:72px}
+.section-header h2{font-family:'Space Grotesk',sans-serif;font-size:clamp(1.8rem,3.2vw,2.6rem);font-weight:700;letter-spacing:-.03em;line-height:1.15;margin-bottom:14px;color:var(--text1)}
+.section-header p{font-size:15px;color:var(--text2);max-width:480px;line-height:1.7}
+.accent{color:var(--accent)}
+
+/* ===== REVEAL ===== */
+.reveal{opacity:0;transform:translateY(40px);transition:all .9s cubic-bezier(.16,1,.3,1)}
+.reveal.visible{opacity:1;transform:translateY(0)}
+.d1{transition-delay:.08s}.d2{transition-delay:.16s}.d3{transition-delay:.24s}.d4{transition-delay:.32s}
 
 /* ===== NAV ===== */
-nav{position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:100;width:auto}
-.nav-inner{display:flex;align-items:center;gap:32px;padding:12px 24px 12px 32px;border-radius:9999px;background:rgba(5,5,5,.75);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(255,255,255,.08);box-shadow:0 8px 32px rgba(0,0,0,.4)}
-.nav-logo{font-weight:700;font-size:15px;letter-spacing:-.02em;white-space:nowrap;display:flex;align-items:center;gap:8px}
-.nav-logo i{font-size:18px;color:#818cf8}
-.nav-links{display:flex;align-items:center;gap:4px;list-style:none}
-.nav-links a{position:relative;padding:6px 14px;font-size:13px;font-weight:500;color:rgba(255,255,255,.6);transition:color .4s cubic-bezier(.32,.72,0,1);border-radius:6px}
-.nav-links a::after{content:'';position:absolute;bottom:2px;left:14px;right:14px;height:1.5px;background:#818cf8;border-radius:2px;transform:scaleX(0);transition:transform .5s cubic-bezier(.32,.72,0,1);transform-origin:center}
-.nav-links a:hover{color:#fff}
-.nav-links a:hover::after{transform:scaleX(1)}
-.nav-cta{padding:8px 20px;border-radius:9999px;background:#fff;color:#050505;font-size:13px;font-weight:600;transition:all .4s cubic-bezier(.32,.72,0,1);white-space:nowrap}
-.nav-cta:hover{background:#818cf8;color:#fff;transform:scale(.97)}
+nav{padding-top:20px;position:fixed;top:0;left:0;right:0;z-index:100;display:flex;justify-content:center;pointer-events:none}
+.nav-island{pointer-events:auto;display:flex;align-items:center;gap:8px;padding:6px 6px 6px 20px;border-radius:100px;background:rgba(17,22,46,.88);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);border:1px solid rgba(255,255,255,.06);box-shadow:0 8px 32px rgba(0,0,0,.5);max-width:calc(100vw - 40px)}
+.nav-logo{display:flex;align-items:center;gap:8px;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;color:rgba(255,255,255,.85);letter-spacing:-.02em;white-space:nowrap}
+.nav-logo i{font-size:16px;color:var(--accent)}
+.nav-links{display:flex;align-items:center;gap:2px;list-style:none;margin:0 16px}
+.nav-links a{padding:6px 14px;font-size:13px;font-weight:500;color:var(--text2);border-radius:6px;transition:color .3s;white-space:nowrap}
+.nav-links a:hover{color:var(--text1)}
+.nav-actions{display:flex;align-items:center;gap:6px}
+.nav-actions .btn{padding:7px 18px;border-radius:100px;background:linear-gradient(135deg,#22d3ee,#0891b2);color:#08051a;font-size:13px;font-weight:600;font-family:inherit;border:none;cursor:pointer;transition:all .3s cubic-bezier(.16,1,.3,1);white-space:nowrap;display:flex;align-items:center;gap:6px}
+.nav-actions .btn:hover{transform:translateY(-1px);box-shadow:0 4px 24px rgba(34,211,238,.25)}
+.nav-toggle{display:none;background:none;border:none;color:#fff;cursor:pointer;width:34px;height:34px;position:relative;border-radius:50%;align-items:center;justify-content:center;flex-shrink:0}
+.nav-toggle span{display:block;width:18px;height:1.5px;background:rgba(255,255,255,.4);border-radius:2px;position:absolute;left:8px;transition:all .35s cubic-bezier(.16,1,.3,1)}
+.nav-toggle span:nth-child(1){top:11px}
+.nav-toggle span:nth-child(2){top:16px;width:12px}
+.nav-toggle span:nth-child(3){top:21px}
+.nav-toggle.active span:nth-child(1){top:16px;transform:rotate(45deg);width:18px}
+.nav-toggle.active span:nth-child(2){opacity:0;transform:translateX(8px)}
+.nav-toggle.active span:nth-child(3){top:16px;transform:rotate(-45deg);width:18px}
 
-/* Mobile nav toggle */
-.nav-toggle{display:none;background:none;border:none;color:#fff;cursor:pointer;padding:8px;position:relative;width:32px;height:32px}
-.nav-toggle span{display:block;width:20px;height:1.5px;background:#fff;border-radius:2px;position:absolute;left:6px;transition:all .4s cubic-bezier(.32,.72,0,1)}
-.nav-toggle span:nth-child(1){top:10px}
-.nav-toggle span:nth-child(2){top:15px;width:14px}
-.nav-toggle span:nth-child(3){top:20px}
-.nav-toggle.active span:nth-child(1){top:15px;transform:rotate(45deg)}
-.nav-toggle.active span:nth-child(2){opacity:0;width:0}
-.nav-toggle.active span:nth-child(3){top:15px;transform:rotate(-45deg)}
+/* ===== MOBILE OVERLAY ===== */
+.nav-overlay{position:fixed;top:0;left:0;right:0;bottom:0;z-index:99;background:rgba(7,11,26,.93);-webkit-backdrop-filter:blur(40px);backdrop-filter:blur(40px);opacity:0;pointer-events:none;transition:opacity .5s cubic-bezier(.16,1,.3,1);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:20px}
+.nav-overlay.open{opacity:1;pointer-events:auto}
+.nav-overlay a{padding:16px 24px;font-size:22px;font-weight:600;color:var(--text2);transition:color .4s;font-family:'Space Grotesk',sans-serif;letter-spacing:-.02em}
+.nav-overlay a:hover{color:var(--text1)}
+.nav-overlay .btn{display:inline-flex;align-items:center;gap:10px;margin-top:24px;padding:14px 32px;border-radius:100px;background:linear-gradient(135deg,#22d3ee,#0891b2);color:#08051a;font-size:15px;font-weight:600;font-family:inherit;border:none;cursor:pointer}
 
 /* ===== HERO ===== */
-.hero{min-height:100dvh;display:flex;align-items:center;justify-content:center;text-align:center;padding:120px 24px 80px;position:relative}
-.hero-content{max-width:800px;position:relative;z-index:1}
-.hero-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:9999px;background:rgba(129,140,248,.12);border:1px solid rgba(129,140,248,.2);font-size:12px;font-weight:500;color:#a5b4fc;letter-spacing:.05em;margin-bottom:24px;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
-.hero-badge i{font-size:14px}
-.hero h1{font-size:clamp(2.8rem,7vw,5rem);font-weight:800;line-height:1.08;letter-spacing:-.04em;margin-bottom:24px}
-.hero h1 .gradient-text{background:linear-gradient(135deg,#fff 30%,#818cf8 60%,#a78bfa 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.hero p{font-size:clamp(1rem,2vw,1.2rem);color:rgba(255,255,255,.5);max-width:600px;margin:0 auto 40px;font-weight:400;line-height:1.7}
-.hero-actions{display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap}
-
-/* ===== BUTTONS ===== */
-.btn{display:inline-flex;align-items:center;gap:10px;padding:14px 28px;border-radius:9999px;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;transition:all .5s cubic-bezier(.32,.72,0,1);border:none;position:relative}
+.hero{min-height:100dvh;display:flex;align-items:center;padding-top:100px;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;top:-40%;right:-15%;width:800px;height:800px;border-radius:50%;background:radial-gradient(circle,rgba(34,211,238,.05) 0%,rgba(217,70,239,.03) 40%,transparent 70%);pointer-events:none}
+.hero::after{content:'';position:absolute;bottom:-30%;left:-10%;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(245,158,11,.04) 0%,rgba(139,92,246,.03) 40%,transparent 70%);pointer-events:none}
+.hero-grid{display:grid;grid-template-columns:1fr 1fr;gap:80px;max-width:1200px;margin:0 auto;padding:0 32px;width:100%;align-items:center;position:relative;z-index:1}
+.hero-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 14px 5px 12px;border-radius:100px;background:rgba(34,211,238,.06);border:1px solid rgba(34,211,238,.12);font-size:11px;font-weight:600;color:var(--cyan);letter-spacing:.02em;margin-bottom:32px}
+.hero h1{font-family:'Space Grotesk','Plus Jakarta Sans',sans-serif;font-size:clamp(2.6rem,5.5vw,4.2rem);font-weight:700;letter-spacing:-.04em;line-height:1.06;margin-bottom:18px}
+.hero h1 .em{background:linear-gradient(135deg,#22d3ee,#f59e0b,#d946ef);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero p{font-size:15px;color:var(--text2);max-width:440px;line-height:1.8;margin-bottom:40px}
+.hero-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:10px;padding:13px 26px;border-radius:100px;font-size:14px;font-weight:600;font-family:'Plus Jakarta Sans',sans-serif;cursor:pointer;transition:all .35s cubic-bezier(.16,1,.3,1);border:none;text-decoration:none}
 .btn:active{transform:scale(.97)}
-.btn-primary{background:#fff;color:#050505}
-.btn-primary:hover{background:#818cf8;color:#fff;transform:translateY(-2px)}
-.btn-primary i{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.08);font-size:14px;transition:all .4s cubic-bezier(.32,.72,0,1)}
-.btn-primary:hover i{background:rgba(255,255,255,.2);transform:translate(2px,-1px)}
-.btn-secondary{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.8)}
-.btn-secondary:hover{background:rgba(255,255,255,.1);color:#fff;transform:translateY(-2px)}
-.btn-github{display:inline-flex;align-items:center;gap:8px;padding:14px 28px;border-radius:9999px;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;transition:all .5s cubic-bezier(.32,.72,0,1);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.7);background:rgba(255,255,255,.04)}
-.btn-github:hover{background:rgba(255,255,255,.1);color:#fff;transform:translateY(-2px)}
+.btn-primary{background:linear-gradient(135deg,#f59e0b,#d97706);color:#070b1a;position:relative;overflow:hidden}
+.btn-primary::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.2),transparent);opacity:0;transition:opacity .35s;border-radius:inherit}
+.btn-primary:hover::before{opacity:1}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(245,158,11,.25)}
+.btn-primary .btn-icon{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:rgba(0,0,0,.1);font-size:13px;transition:all .35s cubic-bezier(.16,1,.3,1);flex-shrink:0}
+.btn-primary:hover .btn-icon{transform:translateX(3px) translateY(-1px)}
+.btn-ghost{background:rgba(255,255,255,.04);color:var(--text2);border:1px solid var(--border)}
+.btn-ghost:hover{background:rgba(255,255,255,.06);color:var(--text1);border-color:rgba(255,255,255,.08)}
 
-/* ===== SECTION COMMON ===== */
-.section{padding:100px 0}
-.section-header{text-align:center;margin-bottom:64px}
-.section-tag{display:inline-flex;align-items:center;gap:6px;padding:4px 14px;border-radius:9999px;background:rgba(129,140,248,.1);border:1px solid rgba(129,140,248,.15);font-size:11px;font-weight:600;color:#a5b4fc;letter-spacing:.15em;text-transform:uppercase;margin-bottom:16px}
-.section-header h2{font-size:clamp(1.8rem,4vw,2.8rem);font-weight:700;letter-spacing:-.03em;line-height:1.15;margin-bottom:16px}
-.section-header p{font-size:1.05rem;color:rgba(255,255,255,.45);max-width:560px;margin:0 auto}
+/* Hero Terminal */
+.hero-visual{display:flex;align-items:center;justify-content:center;position:relative}
+.hero-visual::before{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:90%;height:90%;background:radial-gradient(circle,rgba(245,158,11,.06) 0%,transparent 70%);pointer-events:none}
+.hero-terminal{width:100%;max-width:520px;border-radius:16px;position:relative;z-index:1;box-shadow:0 32px 80px rgba(0,0,0,.5),0 0 0 1px rgba(34,211,238,.04)}
+.hero-terminal .inner{border-radius:16px;background:linear-gradient(160deg,var(--surface),var(--bg2));border:1px solid rgba(255,255,255,.04);overflow:hidden;position:relative}
+.hero-terminal .inner::before{content:'';position:absolute;inset:0;border-radius:16px;padding:1px;background:linear-gradient(135deg,rgba(34,211,238,.08),rgba(217,70,239,.04),rgba(245,158,11,.08));-webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none}
+.terminal-header{display:flex;align-items:center;gap:8px;padding:14px 18px;border-bottom:1px solid var(--border)}
+.terminal-dot{width:10px;height:10px;border-radius:50%}
+.terminal-dot:nth-child(1){background:#ef4444}
+.terminal-dot:nth-child(2){background:#eab308}
+.terminal-dot:nth-child(3){background:#22c55e}
+.terminal-title{font-size:11px;color:var(--text3);margin-left:10px;font-weight:500;font-family:'JetBrains Mono',monospace}
+.terminal-body{padding:22px 24px;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:2;color:var(--text2)}
+.terminal-body .arrow{color:var(--cyan)}
+.terminal-body .data{color:var(--text1)}
+.terminal-body .ok{color:#34d399}
+.terminal-body .dim{color:var(--text3)}
+.terminal-body .highlight{color:#fbbf24}
+.terminal-body .key{color:var(--fuchsia)}
+.terminal-body .divider{color:var(--border)}
+.pulse-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);margin-right:6px;animation:pulse 2s ease-in-out infinite;vertical-align:middle}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1);box-shadow:0 0 0 0 rgba(245,158,11,.3)}50%{opacity:.5;transform:scale(.85);box-shadow:0 0 0 6px rgba(245,158,11,0)}}
 
-/* ===== FEATURES BENTO ===== */
-.features-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:24px}
-.feature-card{grid-column:span 4;border-radius:24px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);padding:32px;transition:all .5s cubic-bezier(.32,.72,0,1);position:relative;overflow:hidden}
-.feature-card::before{content:'';position:absolute;inset:0;border-radius:24px;padding:1px;background:linear-gradient(135deg,rgba(255,255,255,.08),transparent 50%,rgba(255,255,255,.02));-webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none}
-.feature-card:hover{transform:translateY(-4px);border-color:rgba(129,140,248,.15);background:rgba(129,140,248,.04)}
-.feature-card:hover::before{background:linear-gradient(135deg,rgba(129,140,248,.2),transparent 50%,rgba(129,140,248,.05))}
-.feature-card.wide{grid-column:span 6}
-.feature-card.tall{grid-row:span 2;display:flex;flex-direction:column}
-.feature-icon{width:44px;height:44px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:20px;background:rgba(129,140,248,.12);border:1px solid rgba(129,140,248,.15);color:#a5b4fc}
-.feature-card h3{font-size:17px;font-weight:600;margin-bottom:10px;letter-spacing:-.02em}
-.feature-card p{font-size:14px;color:rgba(255,255,255,.45);line-height:1.7}
+/* ===== FEATURES ===== */
+.features-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.feature-shell{padding:1px;border-radius:14px;background:linear-gradient(135deg,rgba(255,255,255,.03),rgba(255,255,255,.01));transition:all .5s cubic-bezier(.16,1,.3,1)}
+.feature-shell:hover{background:linear-gradient(135deg,rgba(245,158,11,.1),rgba(99,102,241,.04));transform:translateY(-4px);box-shadow:0 12px 40px rgba(0,0,0,.2)}
+.feature-core{padding:36px;border-radius:13px;background:var(--surface);height:100%;border:1px solid rgba(255,255,255,.02);transition:all .5s cubic-bezier(.16,1,.3,1)}
+.feature-shell:hover .feature-core{background:var(--surface2)}
+.feature-core .icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:22px;transition:all .4s cubic-bezier(.16,1,.3,1)}
+.feature-shell:hover .icon{transform:scale(1.05)}
+.feature-shell:nth-child(4n+1) .icon{color:var(--cyan);background:rgba(34,211,238,.06);border:1px solid rgba(34,211,238,.1)}
+.feature-shell:nth-child(4n+1):hover .icon{background:rgba(34,211,238,.1);border-color:rgba(34,211,238,.18)}
+.feature-shell:nth-child(4n+1):hover{background:linear-gradient(135deg,rgba(34,211,238,.08),rgba(139,92,246,.03))}
+.feature-shell:nth-child(4n+2) .icon{color:var(--fuchsia);background:rgba(217,70,239,.06);border:1px solid rgba(217,70,239,.1)}
+.feature-shell:nth-child(4n+2):hover .icon{background:rgba(217,70,239,.1);border-color:rgba(217,70,239,.18)}
+.feature-shell:nth-child(4n+2):hover{background:linear-gradient(135deg,rgba(217,70,239,.08),rgba(34,211,238,.03))}
+.feature-shell:nth-child(4n+3) .icon{color:var(--accent);background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.1)}
+.feature-shell:nth-child(4n+3):hover .icon{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.18)}
+.feature-shell:nth-child(4n+3):hover{background:linear-gradient(135deg,rgba(245,158,11,.08),rgba(34,211,238,.03))}
+.feature-shell:nth-child(4n+4) .icon{color:var(--violet);background:rgba(139,92,246,.06);border:1px solid rgba(139,92,246,.1)}
+.feature-shell:nth-child(4n+4):hover .icon{background:rgba(139,92,246,.1);border-color:rgba(139,92,246,.18)}
+.feature-shell:nth-child(4n+4):hover{background:linear-gradient(135deg,rgba(139,92,246,.08),rgba(245,158,11,.03))}
+.feature-core h3{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;margin-bottom:8px;letter-spacing:-.01em;color:var(--text1)}
+.feature-core p{font-size:13px;color:var(--text2);line-height:1.7}
 
 /* ===== SCREENSHOTS ===== */
-.screenshots-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
-.screenshots-grid .full{grid-column:1/-1;max-width:560px;margin:0 auto;width:100%}
-.screenshot-card{border-radius:20px;overflow:hidden;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);transition:all .5s cubic-bezier(.32,.72,0,1)}
-.screenshot-card:hover{transform:translateY(-4px);border-color:rgba(129,140,248,.15)}
-.screenshot-card .img-wrap{aspect-ratio:16/10;background:linear-gradient(135deg,rgba(129,140,248,.08),rgba(168,85,247,.05));display:flex;align-items:center;justify-content:center;overflow:hidden}
-.screenshot-card .img-wrap img{width:100%;height:100%;object-fit:cover;transition:transform .6s cubic-bezier(.32,.72,0,1)}
-.screenshot-card:hover .img-wrap img{transform:scale(1.03)}
-.screenshot-card .caption{padding:20px 24px}
-.screenshot-card .caption h4{font-size:15px;font-weight:600;margin-bottom:4px}
-.screenshot-card .caption p{font-size:13px;color:rgba(255,255,255,.45)}
-.screenshot-card.wide{grid-column:1/-1}
-
-/* ===== DOWNLOAD ===== */
-.download-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;max-width:800px;margin:0 auto}
-.download-card{border-radius:24px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);padding:40px;text-align:center;transition:all .5s cubic-bezier(.32,.72,0,1);position:relative;overflow:hidden}
-.download-card::before{content:'';position:absolute;inset:0;border-radius:24px;padding:1px;background:linear-gradient(135deg,rgba(255,255,255,.08),transparent 50%,rgba(255,255,255,.02));-webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none}
-.download-card:hover{transform:translateY(-4px);border-color:rgba(129,140,248,.2)}
-.download-card .dl-icon{width:56px;height:56px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 20px;background:rgba(129,140,248,.12);border:1px solid rgba(129,140,248,.15);color:#a5b4fc}
-.download-card h3{font-size:19px;font-weight:600;margin-bottom:8px}
-.download-card p{font-size:14px;color:rgba(255,255,255,.45);margin-bottom:24px}
-.download-card .btn{width:100%;justify-content:center}
-.download-card .btn i{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.08);font-size:14px;transition:all .4s cubic-bezier(.32,.72,0,1)}
-.download-card .btn:hover i{background:rgba(255,255,255,.2);transform:translate(2px,-1px)}
-.download-note{text-align:center;margin-top:20px;font-size:13px;color:rgba(255,255,255,.3);grid-column:1/-1}
+.sc-section{background:linear-gradient(180deg,transparent,rgba(34,211,238,.015),rgba(217,70,239,.015),transparent)}
+.sc-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:960px;margin:0 auto}
+.sc-card{border-radius:14px;overflow:hidden;background:var(--surface);border:1px solid var(--border);transition:all .5s cubic-bezier(.16,1,.3,1)}
+.sc-card:nth-child(1):hover{border-color:rgba(34,211,238,.12)}
+.sc-card:nth-child(2):hover{border-color:rgba(217,70,239,.12)}
+.sc-card:nth-child(3):hover{border-color:rgba(245,158,11,.12)}
+.sc-card:hover{transform:translateY(-3px);box-shadow:0 16px 48px rgba(0,0,0,.3)}
+.sc-card .img-wrap{background:linear-gradient(135deg,rgba(245,158,11,.03),rgba(245,158,11,.01));display:flex;align-items:center;justify-content:center;overflow:hidden}
+.sc-card .img-wrap img{width:100%;height:100%;object-fit:contain;border-radius:4px;transition:transform .6s cubic-bezier(.16,1,.3,1)}
+.sc-card:hover .img-wrap img{transform:scale(1.02)}
+.sc-card .cap{padding:20px 24px}
+.sc-card .cap h4{font-size:14px;font-weight:600;margin-bottom:3px;color:var(--text1)}
+.sc-card .cap p{font-size:12px;color:var(--text2)}
+.sc-card.sphone .img-wrap{aspect-ratio:9/17;min-height:380px;max-height:560px;padding:16px}
+.sc-card.sphone .img-wrap img{max-height:500px}
+.sc-card.screen .img-wrap{aspect-ratio:16/10;min-height:300px;padding:16px}
+.sc-card.screen{grid-column:1/-1;max-width:720px;margin:0 auto;width:100%}
 
 /* ===== TUTORIAL ===== */
-.tutorial-steps{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:32px}
-.tutorial-step{border-radius:20px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);padding:32px;transition:all .5s cubic-bezier(.32,.72,0,1)}
-.tutorial-step:hover{transform:translateY(-2px);border-color:rgba(129,140,248,.12)}
-.tutorial-step-header{display:flex;align-items:center;gap:16px;margin-bottom:16px}
-.tutorial-step-num{display:inline-flex;align-items:center;padding:4px 14px;border-radius:9999px;background:rgba(129,140,248,.12);border:1px solid rgba(129,140,248,.15);font-size:11px;font-weight:600;color:#a5b4fc;letter-spacing:.08em;white-space:nowrap}
-.tutorial-step-header h3{font-size:19px;font-weight:600;letter-spacing:-.02em}
-.tutorial-step-body p{font-size:14px;color:rgba(255,255,255,.55);line-height:1.7;margin-bottom:12px}
-.tutorial-step-body p:last-child{margin-bottom:0}
-.tutorial-step-body code{color:#a5b4fc;font-size:13px;font-family:'Plus Jakarta Sans',monospace}
-.tutorial-ol{display:flex;flex-direction:column;gap:8px;padding-left:20px;margin-bottom:12px;font-size:14px;color:rgba(255,255,255,.55);line-height:1.7}
-.tutorial-ol li::marker{color:#818cf8}
-.tutorial-note{display:flex;align-items:flex-start;gap:10px;padding:12px 16px;border-radius:12px;background:rgba(129,140,248,.06);border:1px solid rgba(129,140,248,.1);font-size:13px;color:rgba(255,255,255,.5);line-height:1.6;margin-top:12px}
-.tutorial-note i{font-size:16px;color:#818cf8;margin-top:2px;flex-shrink:0}
-.tutorial-warning{display:flex;align-items:flex-start;gap:10px;padding:14px 16px;border-radius:12px;background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.12);font-size:13px;color:rgba(255,255,255,.6);line-height:1.6;margin-bottom:16px}
-.tutorial-warning i{font-size:16px;color:#fbbf24;margin-top:2px;flex-shrink:0}
-.tutorial-code-block{display:flex;flex-direction:column;gap:4px;padding:16px 20px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);font-family:'Plus Jakarta Sans',monospace;font-size:13px;color:rgba(255,255,255,.5);margin-bottom:12px;line-height:1.8}
+.t-section{background:linear-gradient(180deg,transparent,rgba(139,92,246,.02),rgba(245,158,11,.01),transparent);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.t-steps{max-width:720px;margin:0 auto}
+.t-step{display:grid;grid-template-columns:44px 1fr;gap:24px;padding:32px 0;position:relative}
+.t-step+.t-step{border-top:1px solid var(--border)}
+.t-step:nth-child(1) .t-step-num{background:rgba(34,211,238,.08);border-color:rgba(34,211,238,.12);color:var(--cyan)}
+.t-step:nth-child(2) .t-step-num{background:rgba(217,70,239,.08);border-color:rgba(217,70,239,.12);color:var(--fuchsia)}
+.t-step:nth-child(3) .t-step-num{background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.12);color:var(--accent)}
+.t-step:nth-child(4) .t-step-num{background:rgba(139,92,246,.08);border-color:rgba(139,92,246,.12);color:var(--violet)}
+.t-step-num{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;font-family:'Space Grotesk',sans-serif;margin-top:2px}
+.t-step-body h3{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:600;margin-bottom:10px;letter-spacing:-.01em;color:var(--text1)}
+.t-step-body p{font-size:14px;color:var(--text2);line-height:1.7;margin-bottom:8px}
+.t-step-body p:last-child{margin-bottom:0}
+.t-step-body code{font-family:'JetBrains Mono',monospace;color:#fbbf24;font-size:13px;background:rgba(245,158,11,.06);padding:1px 6px;border-radius:4px}
+.t-step-body ol{padding-left:18px;margin-bottom:8px;font-size:14px;color:var(--text2);line-height:1.8}
+.t-step-body ol li::marker{color:var(--accent)}
+.t-note{display:flex;align-items:flex-start;gap:10px;padding:14px 18px;border-radius:10px;background:rgba(245,158,11,.04);border:1px solid rgba(245,158,11,.06);font-size:13px;color:var(--text2);line-height:1.6;margin-top:12px}
+.t-note i{color:var(--accent);margin-top:3px;flex-shrink:0;font-size:15px}
+.t-warn{display:flex;align-items:flex-start;gap:10px;padding:14px 18px;border-radius:10px;background:rgba(251,191,36,.04);border:1px solid rgba(251,191,36,.08);font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:12px}
+.t-warn i{color:#fbbf24;margin-top:3px;flex-shrink:0;font-size:15px}
+.t-code{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text2);background:rgba(255,255,255,.015);border:1px solid var(--border);border-radius:10px;padding:16px 20px;margin-bottom:10px;line-height:2}
 
 /* ===== COMMANDS ===== */
-.commands-section{background:rgba(255,255,255,.02);border-top:1px solid rgba(255,255,255,.04);border-bottom:1px solid rgba(255,255,255,.04)}
-.command-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
-.command-item{display:flex;align-items:center;gap:12px;padding:14px 20px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05);font-size:13px;transition:all .3s ease}
-.command-item:hover{background:rgba(129,140,248,.06);border-color:rgba(129,140,248,.12)}
-.command-item code{font-family:'Plus Jakarta Sans',monospace;font-size:12px;font-weight:500;color:#a5b4fc;white-space:nowrap}
-.command-item span{color:rgba(255,255,255,.5)}
-.command-item .cmd-desc{margin-left:auto;font-size:12px;color:rgba(255,255,255,.35)}
+.cmd-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;max-width:800px;margin:0 auto}
+.cmd-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 20px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:all .35s cubic-bezier(.16,1,.3,1)}
+.cmd-item:nth-child(4n+1):hover{border-color:rgba(34,211,238,.1)}
+.cmd-item:nth-child(4n+2):hover{border-color:rgba(217,70,239,.1)}
+.cmd-item:nth-child(4n+3):hover{border-color:rgba(245,158,11,.1)}
+.cmd-item:nth-child(4n+4):hover{border-color:rgba(139,92,246,.1)}
+.cmd-item:hover{background:var(--surface2)}
+.cmd-item code{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;color:#fbbf24}
+.cmd-item span{font-size:12px;color:var(--text2);white-space:nowrap}
+
+/* ===== DOWNLOAD ===== */
+.dl-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:700px;margin:0 auto}
+.dl-shell{padding:1px;border-radius:14px;background:linear-gradient(135deg,rgba(255,255,255,.03),rgba(255,255,255,.01));transition:all .5s cubic-bezier(.16,1,.3,1)}
+.dl-shell:hover{background:linear-gradient(135deg,rgba(245,158,11,.1),rgba(99,102,241,.04));transform:translateY(-4px);box-shadow:0 12px 40px rgba(0,0,0,.2)}
+.dl-core{padding:48px 40px;border-radius:13px;background:var(--surface);text-align:center;border:1px solid rgba(255,255,255,.02);transition:all .5s}
+.dl-shell:hover .dl-core{background:var(--surface2)}
+.dl-core .icon{width:52px;height:52px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:24px;margin:0 auto 22px;transition:all .4s cubic-bezier(.16,1,.3,1)}
+.dl-shell:nth-child(1) .icon{background:rgba(34,211,238,.06);border:1px solid rgba(34,211,238,.1);color:var(--cyan)}
+.dl-shell:nth-child(2) .icon{background:rgba(217,70,239,.06);border:1px solid rgba(217,70,239,.1);color:var(--fuchsia)}
+.dl-shell:nth-child(1):hover {background:linear-gradient(135deg,rgba(34,211,238,.1),rgba(245,158,11,.04))}
+.dl-shell:nth-child(2):hover {background:linear-gradient(135deg,rgba(217,70,239,.1),rgba(139,92,246,.04))}
+.dl-core h3{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:600;margin-bottom:6px;color:var(--text1)}
+.dl-core p{font-size:13px;color:var(--text2);margin-bottom:28px}
+.dl-core .btn{display:inline-flex;align-items:center;gap:10px;padding:12px 28px;border-radius:100px;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;transition:all .35s cubic-bezier(.16,1,.3,1);border:none;text-decoration:none;justify-content:center}
+.dl-core .btn:active{transform:scale(.97)}
+.dl-core .btn-primary{background:linear-gradient(135deg,#f59e0b,#d97706);color:#070b1a}
+.dl-core .btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(245,158,11,.25)}
+.dl-core .btn-ghost{background:rgba(255,255,255,.04);color:var(--text2);border:1px solid var(--border)}
+.dl-core .btn-ghost:hover{background:rgba(255,255,255,.06);color:var(--text1);border-color:rgba(255,255,255,.08)}
 
 /* ===== FOOTER ===== */
-footer{border-top:1px solid rgba(255,255,255,.06);padding:48px 0 32px}
-.footer-inner{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px}
-.footer-inner .copyright{font-size:13px;color:rgba(255,255,255,.3)}
+footer{background:linear-gradient(180deg,transparent,rgba(34,211,238,.015));border-top:1px solid var(--border);padding:56px 0}
+.footer-inner{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;max-width:1200px;margin:0 auto;padding:0 32px}
+.footer-inner .copy{font-size:13px;color:var(--text3)}
 .footer-links{display:flex;align-items:center;gap:20px}
-.footer-links a{font-size:13px;color:rgba(255,255,255,.35);transition:color .3s}
-.footer-links a:hover{color:#a5b4fc}
-.footer-disclaimer{margin-top:24px;padding:16px 20px;border-radius:12px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.04);font-size:12px;color:rgba(255,255,255,.25);text-align:center;line-height:1.6}
-
-/* ===== REVEAL ANIMATION ===== */
-.reveal{opacity:0;transform:translateY(40px) scale(.98);transition:all .8s cubic-bezier(.32,.72,0,1)}
-.reveal.visible{opacity:1;transform:translateY(0) scale(1)}
-.reveal-delay-1{transition-delay:.1s}
-.reveal-delay-2{transition-delay:.2s}
-.reveal-delay-3{transition-delay:.3s}
-.reveal-delay-4{transition-delay:.4s}
+.footer-links a{font-size:13px;color:var(--text3);transition:color .35s}
+.footer-links a:nth-child(1):hover{color:var(--cyan)}
+.footer-links a:nth-child(2):hover{color:var(--accent)}
+.footer-links a:nth-child(3):hover{color:var(--fuchsia)}
+.footer-disc{max-width:1200px;margin:20px auto 0;padding:0 32px;font-size:12px;color:var(--text3);text-align:center;line-height:1.7}
 
 /* ===== RESPONSIVE ===== */
-@media(max-width:900px){
-  .features-grid{grid-template-columns:repeat(6,1fr);gap:16px}
-  .feature-card{grid-column:span 6 !important}
-  .screenshots-grid{grid-template-columns:1fr}
-  .download-grid{grid-template-columns:1fr}
-  .command-grid{grid-template-columns:1fr}
+@media(max-width:1024px){
+  .hero-grid{gap:48px}
 }
-
+@media(max-width:900px){
+  .hero-grid{grid-template-columns:1fr;gap:40px;text-align:center}
+  .hero p{margin:0 auto 40px;max-width:500px}
+  .hero-actions{justify-content:center}
+  .hero-visual{display:none}
+  .hero::before,.hero::after{display:none}
+  .features-grid{grid-template-columns:1fr}
+  .section{padding:100px 0}
+  .sc-grid{grid-template-columns:1fr}
+  .cmd-grid{grid-template-columns:1fr}
+  .dl-grid{grid-template-columns:1fr}
+  .section-header p{margin:0 auto}
+}
 @media(max-width:768px){
-  .nav-links,.nav-cta{display:none}
-  .nav-toggle{display:block}
-  .nav-inner{padding:10px 16px 10px 24px;gap:16px;width:calc(100vw - 32px)}
-  
-  .nav-links.mobile-open{display:flex;flex-direction:column;position:fixed;top:80px;left:16px;right:16px;background:rgba(5,5,5,.92);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:16px;gap:4px;z-index:99}
-  .nav-links.mobile-open a{padding:12px 16px;font-size:15px;border-radius:10px}
-  .nav-links.mobile-open a:hover{background:rgba(255,255,255,.05)}
-  .nav-links.mobile-open a::after{display:none}
-  .nav-links.mobile-open+.nav-cta{display:block;position:fixed;top:auto;bottom:24px;left:16px;right:16px;text-align:center;padding:16px;font-size:16px;background:#fff;color:#050505}
-
-  .section{padding:64px 0}
-  .hero{padding:100px 24px 60px}
-  .hero h1{font-size:clamp(2rem,10vw,2.8rem)}
-  
+  .container{padding:0 20px}
+  .section{padding:80px 0}
+  .nav-island{padding:5px 5px 5px 16px;gap:4px;width:calc(100vw - 32px);justify-content:space-between}
+  .nav-links{display:none}
+  .nav-toggle{display:flex}
+  .nav-actions .btn{padding:7px 16px;font-size:12px}
+  .nav-actions .btn span{display:none}
+  .hero h1{font-size:clamp(2rem,8vw,2.8rem)}
+  .section-header{text-align:center}
   .footer-inner{flex-direction:column;text-align:center}
   .footer-links{justify-content:center}
+  .t-step{grid-template-columns:1fr;gap:12px}
+  .t-step-num{display:none}
+  .sc-card.sphone .img-wrap{min-height:300px}
+  .sc-card.screen .img-wrap{min-height:220px}
 }
-
 @media(max-width:480px){
+  .hero{padding-top:80px}
   .hero-actions{flex-direction:column;width:100%}
-  .hero-actions .btn,.hero-actions .btn-github{width:100%;justify-content:center}
+  .hero-actions .btn,.hero-actions .btn-ghost{width:100%;justify-content:center}
+  .nav-island{width:calc(100vw - 24px)}
+  .dl-grid{gap:16px}
+}
+@media(prefers-reduced-motion:reduce){
+  .reveal{opacity:1;transform:none;transition:none}
+  .pulse-dot,.bg-orb{animation:none}
+  .feature-shell:hover,.sc-card:hover,.dl-shell:hover{transform:none}
+  .feature-shell:hover .icon,.sc-card:hover img,.btn-primary:hover .btn-icon{transform:none}
 }
 </style>
 </head>
 <body>
 
-<!-- Mesh BG -->
-<div class="bg-mesh" aria-hidden="true">
-  <div class="orb"></div>
-  <div class="orb"></div>
-  <div class="orb"></div>
+<!-- ===== AMBIENT BG ===== -->
+<div class="bg-layer">
+  <div class="bg-grid"></div>
+  <div class="bg-orb" style="width:600px;height:600px;top:-15%;right:10%;background:radial-gradient(circle,rgba(34,211,238,.07) 0%,transparent 70%);animation-delay:0s"></div>
+  <div class="bg-orb" style="width:500px;height:500px;bottom:20%;left:-5%;background:radial-gradient(circle,rgba(217,70,239,.06) 0%,transparent 70%);animation-delay:-8s"></div>
+  <div class="bg-orb" style="width:400px;height:400px;top:10%;left:15%;background:radial-gradient(circle,rgba(245,158,11,.06) 0%,transparent 70%);animation-delay:-16s"></div>
+  <div class="bg-orb" style="width:500px;height:500px;top:50%;right:-10%;background:radial-gradient(circle,rgba(139,92,246,.05) 0%,transparent 70%);animation-delay:-24s"></div>
+  <div class="bg-orb" style="width:350px;height:350px;bottom:35%;left:40%;background:radial-gradient(circle,rgba(16,185,129,.05) 0%,transparent 70%);animation-delay:-32s"></div>
 </div>
 
 <!-- ===== NAV ===== -->
-<nav role="navigation" aria-label="主导航">
-  <div class="nav-inner">
+<nav>
+  <div class="nav-island">
     <a href="#" class="nav-logo"><i class="ri-bar-chart-2-line"></i> Score Monitor</a>
-    <ul class="nav-links" id="navLinks">
+    <ul class="nav-links">
       <li><a href="#features">功能</a></li>
       <li><a href="#screenshots">预览</a></li>
-      <li><a href="#usage">教程</a></li>
+      <li><a href="#tutorial">教程</a></li>
       <li><a href="#download">下载</a></li>
     </ul>
-    <a href="https://github.com/Dvesiz/score-monitor/releases/latest/download/default.exe" class="nav-cta" target="_blank" rel="noopener">立即下载</a>
-    <button class="nav-toggle" id="navToggle" aria-label="切换菜单">
-      <span></span><span></span><span></span>
-    </button>
+    <div class="nav-actions">
+      <a href="https://github.com/Dvesiz/score-monitor/releases/latest/download/default.exe" class="btn"><i class="ri-download-2-line"></i><span>下载</span></a>
+      <button class="nav-toggle" id="navToggle" aria-label="菜单"><span></span><span></span><span></span></button>
+    </div>
   </div>
 </nav>
+<div class="nav-overlay" id="navOverlay">
+  <a href="#features">功能</a>
+  <a href="#screenshots">预览</a>
+  <a href="#tutorial">教程</a>
+  <a href="#download">下载</a>
+  <a href="https://github.com/Dvesiz/score-monitor/releases/latest/download/default.exe" class="btn"><i class="ri-download-2-line"></i> 下载</a>
+</div>
 
 <!-- ===== HERO ===== -->
 <section class="hero">
-  <div class="hero-content reveal">
-    <div class="hero-badge"><i class="ri-flashlight-line"></i> v1.0 — 开源免费</div>
-    <h1>
-      成绩发布<br>
-      <span class="gradient-text">第一时间知道</span>
-    </h1>
-    <p>自动监控正方教务系统，检测到新成绩时通过 Bark 推送通知到手机。支持验证码识别、智能对比、多账号切换。</p>
-    <div class="hero-actions">
-      <a href="https://github.com/Dvesiz/score-monitor/releases/latest/download/default.exe" class="btn btn-primary" target="_blank" rel="noopener">
-        下载 default.exe
-        <i class="ri-download-2-line"></i>
-      </a>
-      <a href="https://github.com/Dvesiz/score-monitor" class="btn-github" target="_blank" rel="noopener">
-        <i class="ri-github-fill"></i> GitHub
-      </a>
+  <div class="hero-grid">
+    <div class="hero-left reveal">
+      <div class="hero-badge"><i class="ri-flashlight-line"></i> v1.0 · 开源免费</div>
+      <h1>
+        成绩发布<br>
+        <span class="em">一秒都不错过</span>
+      </h1>
+      <p>自动监控正方教务系统，检测到新成绩时通过 Bark 实时推送到手机。支持验证码识别、智能对比、多账号切换。</p>
+      <div class="hero-actions">
+        <a href="https://github.com/Dvesiz/score-monitor/releases/latest/download/default.exe" class="btn btn-primary" target="_blank" rel="noopener">
+          下载 default.exe
+          <span class="btn-icon"><i class="ri-arrow-right-line"></i></span>
+        </a>
+        <a href="https://github.com/Dvesiz/score-monitor" class="btn btn-ghost" target="_blank" rel="noopener">
+          <i class="ri-github-fill"></i> GitHub
+        </a>
+      </div>
+    </div>
+    <div class="hero-visual reveal d2">
+      <div class="hero-terminal">
+        <div class="inner">
+          <div class="terminal-header">
+            <div class="terminal-dot"></div>
+            <div class="terminal-dot"></div>
+            <div class="terminal-dot"></div>
+            <span class="terminal-title">default.exe</span>
+          </div>
+          <div class="terminal-body">
+            <span class="arrow">♦</span> 启动监控程序 v1.0<br>
+            <span class="divider">━━━━━━━━━━━━━━━━━━━━━━</span>
+            学号: <span class="data">2021******</span><br>
+            密码: <span class="key">••••••••</span><br>
+            学年: <span class="data">2025-2026</span> · 学期: <span class="data">2</span><br>
+            Bark Key: <span class="key">配置已读取 ✓</span><br>
+            <span class="divider">━━━━━━━━━━━━━━━━━━━━━━</span>
+            <span class="ok">✓</span> 登录成功 <span class="dim">(1.2s)</span><br>
+            <span class="ok">✓</span> 查询到 <span class="highlight">8</span> 门已发布成绩<br>
+            <span class="ok">✓</span> 缓存更新完成 <span class="dim">(本次无变化)</span><br>
+            <br>
+            <span class="pulse-dot"></span> 下一轮检查: <span class="highlight">5 分钟后</span>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </section>
@@ -251,173 +375,144 @@ footer{border-top:1px solid rgba(255,255,255,.06);padding:48px 0 32px}
 <section class="section" id="features">
   <div class="container">
     <div class="section-header reveal">
-      <div class="section-tag"><i class="ri-lightbulb-line"></i> 核心能力</div>
-      <h2>全自动成绩监控</h2>
-      <p>从登录到通知，全程自动化。无需手动刷新教务系统页面。</p>
+      <h2>每个环节都自动化</h2>
+      <p>从登录到通知，全程无需人工干预。</p>
     </div>
-
     <div class="features-grid">
-      <div class="feature-card reveal reveal-delay-1">
-        <div class="feature-icon"><i class="ri-login-circle-line"></i></div>
-        <h3>自动登录</h3>
-        <p>图形验证码 OCR 自动识别并提交，无需手动干预。失败自动重试。</p>
+      <div class="feature-shell reveal d1">
+        <div class="feature-core">
+          <div class="icon"><i class="ri-login-circle-line"></i></div>
+          <h3>自动登录</h3>
+          <p>图形验证码 ddddocr 本地识别，识别失败自动刷新重试。</p>
+        </div>
       </div>
-      <div class="feature-card reveal reveal-delay-2">
-        <div class="feature-icon"><i class="ri-search-eye-line"></i></div>
-        <h3>成绩查询</h3>
-        <p>自动导航到成绩页面，按指定学年学期查询最新成绩数据。</p>
+      <div class="feature-shell reveal d2">
+        <div class="feature-core">
+          <div class="icon"><i class="ri-search-eye-line"></i></div>
+          <h3>成绩查询</h3>
+          <p>自动导航到成绩页面，按学年学期查询，支持多学期配置。</p>
+        </div>
       </div>
-      <div class="feature-card reveal reveal-delay-3">
-        <div class="feature-icon"><i class="ri-git-branch-line"></i></div>
-        <h3>智能对比</h3>
-        <p>与本地缓存对比，仅在有新成绩或成绩更新时触发通知，避免重复打扰。</p>
+      <div class="feature-shell reveal d1">
+        <div class="feature-core">
+          <div class="icon"><i class="ri-git-branch-line"></i></div>
+          <h3>智能对比</h3>
+          <p>与本地缓存对比，仅在新成绩发布或更新时触发通知。</p>
+        </div>
       </div>
-      <div class="feature-card reveal reveal-delay-1">
-        <div class="feature-icon"><i class="ri-file-list-3-line"></i></div>
-        <h3>平时分 / 卷面分</h3>
-        <p>从 __VIEWSTATE 自动提取平时分 (PSCJ) 和卷面分 (QMCJ)，与总成绩一并展示。</p>
+      <div class="feature-shell reveal d2">
+        <div class="feature-core">
+          <div class="icon"><i class="ri-file-list-3-line"></i></div>
+          <h3>平时 / 卷面分</h3>
+          <p>从 VIEWSTATE 解析平时分和卷面分，成绩展示更完整。</p>
+        </div>
       </div>
-      <div class="feature-card reveal reveal-delay-2">
-        <div class="feature-icon"><i class="ri-notification-4-line"></i></div>
-        <h3>Bark 推送</h3>
-        <p>新成绩或成绩更新时，通过 Bark 实时推送到 iOS 设备，可在通知中心查看。</p>
+      <div class="feature-shell reveal d1">
+        <div class="feature-core">
+          <div class="icon"><i class="ri-notification-4-line"></i></div>
+          <h3>Bark 推送</h3>
+          <p>支持 Bark 推送，新成绩实时送达 iOS 通知中心。</p>
+        </div>
       </div>
-      <div class="feature-card reveal reveal-delay-3">
-        <div class="feature-icon"><i class="ri-timer-2-line"></i></div>
-        <h3>持续监控</h3>
-        <p>默认每 5 分钟检查一轮，VPN 断线自动重连。间隔时间可随时调整。</p>
+      <div class="feature-shell reveal d2">
+        <div class="feature-core">
+          <div class="icon"><i class="ri-timer-2-line"></i></div>
+          <h3>循环监控</h3>
+          <p>默认 5 分钟检查一轮，VPN 断线自动重连，间隔可调。</p>
+        </div>
       </div>
-      <div class="feature-card reveal reveal-delay-1">
-        <div class="feature-icon"><i class="ri-user-switch-line"></i></div>
-        <h3>多账号支持</h3>
-        <p>支持命令行参数临时切换账号，适合帮同学检查或管理多个账号。</p>
+      <div class="feature-shell reveal d1">
+        <div class="feature-core">
+          <div class="icon"><i class="ri-user-switch-line"></i></div>
+          <h3>多账号切换</h3>
+          <p>通过命令行参数临时切换账号，适合管理多个学生账号。</p>
+        </div>
       </div>
-      <div class="feature-card reveal reveal-delay-2">
-        <div class="feature-icon"><i class="ri-chrome-line"></i></div>
-        <h3>零下载浏览器</h3>
-        <p>自动检测系统已安装的 Chrome/Edge，无需额外下载浏览器内核。</p>
+      <div class="feature-shell reveal d2">
+        <div class="feature-core">
+          <div class="icon"><i class="ri-chrome-line"></i></div>
+          <h3>零浏览器下载</h3>
+          <p>自动复用系统 Chrome/Edge，无需额外下载浏览器内核。</p>
+        </div>
       </div>
     </div>
   </div>
 </section>
 
 <!-- ===== SCREENSHOTS ===== -->
-<section class="section" id="screenshots">
+<section class="section sc-section" id="screenshots">
   <div class="container">
     <div class="section-header reveal">
-      <div class="section-tag"><i class="ri-image-line"></i> 界面预览</div>
-      <h2>一目了然</h2>
+      <h2>界面预览</h2>
       <p>简洁的终端界面，清晰的成绩展示，及时的推送通知。</p>
     </div>
-
-    <div class="screenshots-grid">
-      <div class="screenshot-card reveal reveal-delay-1">
-        <div class="img-wrap">
-          <img src="Pic/Bark的key.png" alt="Bark Key 配置" loading="lazy">
-        </div>
-        <div class="caption">
-          <h4>Bark Key 配置</h4>
-          <p>App Store 下载 Bark，复制设备专属 Key 即可完成推送设置</p>
-        </div>
+    <div class="sc-grid">
+      <div class="sc-card sphone reveal d1">
+        <div class="img-wrap"><img src="Pic/Bark的key.png" alt="Bark Key 配置" loading="lazy"></div>
+        <div class="cap"><h4>Bark Key 配置</h4><p>App Store 下载 Bark，复制设备专属 Key 即可完成推送设置</p></div>
       </div>
-      <div class="screenshot-card reveal reveal-delay-2">
-        <div class="img-wrap">
-          <img src="Pic/启动后.png" alt="程序运行界面" loading="lazy">
-        </div>
-        <div class="caption">
-          <h4>程序主界面</h4>
-          <p>启动后自动登录、查询成绩，终端界面清晰展示各科分数</p>
-        </div>
+      <div class="sc-card sphone reveal d2">
+        <div class="img-wrap"><img src="Pic/手机IOS接收.png" alt="iOS 推送通知" loading="lazy"></div>
+        <div class="cap"><h4>iOS 推送通知</h4><p>新成绩发布时，通过 Bark 实时推送到手机通知中心</p></div>
       </div>
-      <div class="screenshot-card full reveal reveal-delay-3">
-        <div class="img-wrap" style="aspect-ratio:16/9">
-          <img src="Pic/手机IOS接收.png" alt="iOS 推送通知" loading="lazy">
-        </div>
-        <div class="caption">
-          <h4>iOS 推送通知</h4>
-          <p>新成绩发布时，通过 Bark 实时推送到手机通知中心</p>
-        </div>
+      <div class="sc-card screen reveal d3">
+        <div class="img-wrap"><img src="Pic/启动后.png" alt="程序运行界面" loading="lazy"></div>
+        <div class="cap"><h4>程序主界面</h4><p>启动后自动登录、查询成绩，清晰展示各科分数</p></div>
       </div>
     </div>
   </div>
 </section>
 
 <!-- ===== TUTORIAL ===== -->
-<section class="section commands-section" id="usage">
+<section class="section t-section" id="tutorial">
   <div class="container">
     <div class="section-header reveal">
-      <div class="section-tag"><i class="ri-book-open-line"></i> 图文教程</div>
-      <h2>四步上手</h2>
-      <p>下载即用，无需复杂配置。</p>
+      <h2>图文教程</h2>
+      <p>下载即用，四步上手。</p>
     </div>
-
-    <div class="tutorial-steps">
-      <!-- Step 1: 下载 -->
-      <div class="tutorial-step reveal reveal-delay-1">
-        <div class="tutorial-step-header">
-          <span class="tutorial-step-num">Step 1</span>
+    <div class="t-steps">
+      <div class="t-step reveal d1">
+        <div class="t-step-num">1</div>
+        <div class="t-step-body">
           <h3>下载程序</h3>
-        </div>
-        <div class="tutorial-step-body">
-          <p>去 <a href="https://github.com/Dvesiz/score-monitor/releases" target="_blank" rel="noopener" style="color:#a5b4fc;text-decoration:underline">GitHub Releases</a> 下载 <code>default.exe</code>，放到任意目录。</p>
-          <div class="tutorial-note">
-            <i class="ri-information-line"></i>
-            <span><strong>提示：</strong>也可从上方下载按钮直接下载最新版本。</span>
-          </div>
+          <p>从 <a href="https://github.com/Dvesiz/score-monitor/releases" style="color:var(--accent);text-decoration:underline">GitHub Releases</a> 下载 <code>default.exe</code>，放到任意目录。</p>
+          <div class="t-note"><i class="ri-information-line"></i><span>也可从页面顶部或底部下载按钮直接获取最新版本。</span></div>
         </div>
       </div>
-
-      <!-- Step 2: Bark Key -->
-      <div class="tutorial-step reveal reveal-delay-2">
-        <div class="tutorial-step-header">
-          <span class="tutorial-step-num">Step 2</span>
+      <div class="t-step reveal d2">
+        <div class="t-step-num">2</div>
+        <div class="t-step-body">
           <h3>获取 Bark Key（可选）</h3>
-        </div>
-        <div class="tutorial-step-body">
           <p>如果需要手机推送通知：</p>
-          <ol class="tutorial-ol">
+          <ol>
             <li>App Store 搜索 <strong>Bark</strong> 并安装</li>
-            <li>打开 Bark，首页网址 <code>app/</code> 之后的内容就是你的设备 Key（末尾不带 <code>/</code>）</li>
+            <li>打开 Bark，首页网址 <code>app/</code> 之后的内容就是你的设备 Key</li>
           </ol>
-          <div class="tutorial-note">
-            <i class="ri-mac-line"></i>
-            <span>不填 Bark Key 也能正常使用，成绩会在程序内显示。</span>
-          </div>
+          <div class="t-note"><i class="ri-mac-line"></i><span>不填 Bark Key 也能正常使用，成绩会在程序内显示。</span></div>
         </div>
       </div>
-
-      <!-- Step 3: 首次运行 -->
-      <div class="tutorial-step reveal reveal-delay-3">
-        <div class="tutorial-step-header">
-          <span class="tutorial-step-num">Step 3</span>
+      <div class="t-step reveal d3">
+        <div class="t-step-num">3</div>
+        <div class="t-step-body">
           <h3>首次运行</h3>
-        </div>
-        <div class="tutorial-step-body">
-          <div class="tutorial-warning">
-            <i class="ri-error-warning-line"></i>
-            <span><strong>密码第一次必须输入正确。</strong>登录失败会自动重试，但重试 5 次后账户可能被锁定。建议先在浏览器确认密码正确再使用。</span>
-          </div>
+          <div class="t-warn"><i class="ri-error-warning-line"></i><span><strong>密码第一次必须输入正确。</strong>登录失败会自动重试，但重试 5 次后账户可能被锁定。建议先在浏览器确认密码正确再使用。</span></div>
           <p>双击 <code>default.exe</code>，按提示输入：</p>
-          <div class="tutorial-code-block">
-            <span>学号: 2021******</span>
-            <span>密码: ********</span>
-            <span>学年（如 2025-2026）[2025-2026]:</span>
-            <span>学期（1 或 2）[2]:</span>
-            <span>Bark Key（手机推送，不填则不通知）:*******************</span>
+          <div class="t-code">
+学号: 2021******<br>
+密码: ********<br>
+学年（如 2025-2026）[2025-2026]:<br>
+学期（1 或 2）[2]:<br>
+Bark Key（手机推送，不填则不通知）:
           </div>
-          <p>信息会自动保存到同目录下的 <code>config.json</code> 中，后续无需重复输入。</p>
+          <p>信息自动保存到 <code>config.json</code>，后续无需重复输入。</p>
         </div>
       </div>
-
-      <!-- Step 4: 后续运行 -->
-      <div class="tutorial-step reveal reveal-delay-4">
-        <div class="tutorial-step-header">
-          <span class="tutorial-step-num">Step 4</span>
+      <div class="t-step reveal d4">
+        <div class="t-step-num">4</div>
+        <div class="t-step-body">
           <h3>后续运行</h3>
-        </div>
-        <div class="tutorial-step-body">
-          <p>以后直接双击 <code>default.exe</code> 即可，程序自动读取已保存的配置，开始持续监控。</p>
-          <p>首次运行会建立成绩缓存快照，不会推送通知。后续检测到新成绩或成绩更新时才会提醒。</p>
+          <p>直接双击 <code>default.exe</code> 即可自动读取配置，开始持续监控。</p>
+          <p>首次运行只会建立成绩缓存快照，不会推送通知。后续检测到新成绩或更新时才会提醒。</p>
         </div>
       </div>
     </div>
@@ -428,18 +523,16 @@ footer{border-top:1px solid rgba(255,255,255,.06);padding:48px 0 32px}
 <section class="section" id="commands">
   <div class="container">
     <div class="section-header reveal">
-      <div class="section-tag"><i class="ri-terminal-line"></i> 高级用法</div>
       <h2>命令参考</h2>
-      <p>多种运行模式，适应不同使用场景。</p>
+      <p>多种运行模式，适应不同场景。</p>
     </div>
-
-    <div class="command-grid">
-      <div class="command-item reveal reveal-delay-1"><code>default.exe</code><span class="cmd-desc">持续监控（默认 5 分钟间隔）</span></div>
-      <div class="command-item reveal reveal-delay-1"><code>default.exe --once</code><span class="cmd-desc">只检查一次，然后退出</span></div>
-      <div class="command-item reveal reveal-delay-2"><code>default.exe --setup</code><span class="cmd-desc">重新配置学号、密码、Bark Key</span></div>
-      <div class="command-item reveal reveal-delay-2"><code>default.exe --interval 10</code><span class="cmd-desc">临时改为 10 分钟间隔（不保存）</span></div>
-      <div class="command-item reveal reveal-delay-3"><code>default.exe --visible</code><span class="cmd-desc">显示浏览器窗口（调试用）</span></div>
-      <div class="command-item reveal reveal-delay-3"><code>default.exe --student-id 123456 --password xxx</code><span class="cmd-desc">临时切换账号</span></div>
+    <div class="cmd-grid">
+      <div class="cmd-item reveal d1"><code>default.exe</code><span>持续监控（5 分钟间隔）</span></div>
+      <div class="cmd-item reveal d1"><code>--once</code><span>只检查一次后退出</span></div>
+      <div class="cmd-item reveal d2"><code>--setup</code><span>重新配置账号信息</span></div>
+      <div class="cmd-item reveal d2"><code>--interval 10</code><span>临时改为 10 分钟</span></div>
+      <div class="cmd-item reveal d3"><code>--visible</code><span>显示浏览器窗口（调试）</span></div>
+      <div class="cmd-item reveal d3"><code>--id 123 --pw xxx</code><span>临时切换账号</span></div>
     </div>
   </div>
 </section>
@@ -448,89 +541,59 @@ footer{border-top:1px solid rgba(255,255,255,.06);padding:48px 0 32px}
 <section class="section" id="download">
   <div class="container">
     <div class="section-header reveal">
-      <div class="section-tag"><i class="ri-download-2-line"></i> 下载</div>
-      <h2>获取成绩监控</h2>
+      <h2>获取 Score Monitor</h2>
       <p>Windows 平台，下载即用。开源免费，源码可查。</p>
     </div>
-
-    <div class="download-grid">
-      <div class="download-card reveal reveal-delay-1">
-        <div class="dl-icon"><i class="ri-windows-line"></i></div>
-        <h3>Windows 版本</h3>
-        <p>适用于 Windows 10 / 11，单文件免安装</p>
-        <a href="https://github.com/Dvesiz/score-monitor/releases/latest/download/default.exe" class="btn btn-primary" target="_blank" rel="noopener">
-          下载 .exe
-          <i class="ri-download-2-line"></i>
-        </a>
+    <div class="dl-grid">
+      <div class="dl-shell reveal d1">
+        <div class="dl-core">
+          <div class="icon"><i class="ri-windows-line"></i></div>
+          <h3>Windows 版本</h3>
+          <p>适用于 Windows 10 / 11，单文件免安装</p>
+          <a href="https://github.com/Dvesiz/score-monitor/releases/latest/download/default.exe" class="btn btn-primary" target="_blank" rel="noopener">
+            <i class="ri-download-2-line"></i> 下载 default.exe
+          </a>
+        </div>
       </div>
-      <div class="download-card reveal reveal-delay-2">
-        <div class="dl-icon"><i class="ri-code-s-slash-line"></i></div>
-        <h3>源码运行</h3>
-        <p>Python 源码，支持自定义修改和二次开发</p>
-        <a href="https://github.com/Dvesiz/score-monitor" class="btn btn-secondary" target="_blank" rel="noopener">
-          <i class="ri-github-fill"></i> 查看源码
-        </a>
+      <div class="dl-shell reveal d2">
+        <div class="dl-core">
+          <div class="icon"><i class="ri-code-s-slash-line"></i></div>
+          <h3>源码运行</h3>
+          <p>Python 源码，支持自定义修改和二次开发</p>
+          <a href="https://github.com/Dvesiz/score-monitor" class="btn btn-ghost" target="_blank" rel="noopener">
+            <i class="ri-github-fill"></i> 查看源码
+          </a>
+        </div>
       </div>
-      <div class="download-note reveal">💡 提示：首次运行会自动建立成绩缓存快照，不会推送通知。后续检测到变化才会提醒。</div>
     </div>
   </div>
 </section>
 
 <!-- ===== FOOTER ===== -->
 <footer>
-  <div class="container">
-    <div class="footer-inner">
-      <div class="copyright">© 2026 Score Monitor. MIT License.</div>
-      <div class="footer-links">
-        <a href="https://github.com/Dvesiz/score-monitor" target="_blank" rel="noopener"><i class="ri-github-fill"></i> GitHub</a>
-        <a href="https://github.com/Dvesiz/score-monitor/releases" target="_blank" rel="noopener"><i class="ri-download-2-line"></i> Releases</a>
-        <a href="https://github.com/Dvesiz/score-monitor/issues" target="_blank" rel="noopener"><i class="ri-question-line"></i> Issues</a>
-      </div>
-    </div>
-    <div class="footer-disclaimer">
-      <i class="ri-shield-check-line"></i> 本程序仅用于个人学习用途，请勿用于任何违规用途。使用本程序产生的任何后果由使用者自行承担。
+  <div class="footer-inner">
+    <div class="copy">© 2026 Score Monitor · MIT License</div>
+    <div class="footer-links">
+      <a href="https://github.com/Dvesiz/score-monitor" target="_blank" rel="noopener"><i class="ri-github-fill"></i> GitHub</a>
+      <a href="https://github.com/Dvesiz/score-monitor/releases" target="_blank" rel="noopener"><i class="ri-download-2-line"></i> Releases</a>
+      <a href="https://github.com/Dvesiz/score-monitor/issues" target="_blank" rel="noopener"><i class="ri-question-line"></i> Issues</a>
     </div>
   </div>
+  <div class="footer-disc">本程序仅用于个人学习用途，请勿用于任何违规用途。使用本程序产生的任何后果由使用者自行承担。</div>
 </footer>
 
-<!-- ===== SCRIPTS ===== -->
 <script>
-// Mobile nav toggle
-const toggle = document.getElementById('navToggle');
-const links = document.getElementById('navLinks');
-toggle.addEventListener('click', () => {
-  toggle.classList.toggle('active');
-  links.classList.toggle('mobile-open');
-});
-document.querySelectorAll('.nav-links a').forEach(a => {
-  a.addEventListener('click', () => {
-    toggle.classList.remove('active');
-    links.classList.remove('mobile-open');
-  });
-});
+// Nav toggle
+const t=document.getElementById('navToggle'),o=document.getElementById('navOverlay');
+t.addEventListener('click',()=>{t.classList.toggle('active');o.classList.toggle('open');document.body.style.overflow=o.classList.contains('open')?'hidden':''});
+document.querySelectorAll('.nav-overlay a').forEach(a=>{a.addEventListener('click',()=>{t.classList.remove('active');o.classList.remove('open');document.body.style.overflow=''})});
 
 // Scroll reveal
-const observer = new IntersectionObserver((entries) => {
-  entries.forEach(entry => {
-    if (entry.isIntersecting) {
-      entry.target.classList.add('visible');
-      observer.unobserve(entry.target);
-    }
-  });
-}, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+document.querySelector('.hero-left')&&new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&e.target.classList.add('visible')})},{threshold:.1,rootMargin:'0px 0px -60px 0px'}).observe(document.querySelector('.hero-left'));
+document.querySelectorAll('.reveal').forEach(el=>{el!==document.querySelector('.hero-left')&&new IntersectionObserver(entries=>{entries.forEach(e=>{e.isIntersecting&&el.classList.add('visible')})},{threshold:.1,rootMargin:'0px 0px -60px 0px'}).observe(el)});
 
-document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
-
-// Smooth scroll for anchor links
-document.querySelectorAll('a[href^="#"]').forEach(a => {
-  a.addEventListener('click', e => {
-    const target = document.querySelector(a.getAttribute('href'));
-    if (target) {
-      e.preventDefault();
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  });
-});
+// Smooth scroll
+document.querySelectorAll('a[href^="#"]').forEach(a=>{a.addEventListener('click',e=>{const t=document.querySelector(a.getAttribute('href'));if(t){e.preventDefault();t.scrollIntoView({behavior:'smooth'})}})});
 </script>
 </body>
 </html>
