@@ -1,604 +1,580 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Score Monitor — 教务成绩监控</title>
-<meta name="description" content="自动监控正方教务系统成绩发布，检测到新成绩时通过 Bark 推送通知到手机。支持自动登录、验证码OCR、智能对比、持续监控。">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.6.0/fonts/remixicon.min.css">
-<style>
-/* ===== TOKENS ===== */
-:root{
-  --bg1:#08051a;
-  --bg2:#0d0828;
-  --surface:#14103a;
-  --surface2:#1c1648;
-  --border:rgba(255,255,255,.04);
-  --border-hover:rgba(34,211,238,.12);
-  --text1:#f1f5f9;
-  --text2:rgba(255,255,255,.38);
-  --text3:rgba(255,255,255,.16);
-  --accent:#f59e0b;
-  --accent-bg:rgba(245,158,11,.06);
-  --accent-border:rgba(245,158,11,.12);
-  --glow:rgba(245,158,11,.04);
-  --glow-strong:rgba(245,158,11,.08);
-  --cyan:#22d3ee;
-  --fuchsia:#d946ef;
-  --violet:#8b5cf6;
-}
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f3f4ee">
+  <meta name="description" content="Score Monitor 自动监控教务系统成绩变化，新成绩发布时通过 Bark 推送到 iPhone。">
+  <meta property="og:title" content="Score Monitor — 成绩发布，不必反复刷新">
+  <meta property="og:description" content="自动登录、成绩对比、Bark 推送。专为校园教务系统设计。">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://dvesiz.github.io/score-monitor/">
+  <title>Score Monitor — 教务成绩监控</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@4.6.0/fonts/remixicon.min.css">
+  <style>
+    :root {
+      --paper: #f3f4ee;
+      --paper-deep: #e8e9e1;
+      --ink: #11130f;
+      --muted: #62675d;
+      --line: #c9ccc1;
+      --acid: #c8ff3d;
+      --acid-dark: #7fa800;
+      --white: #ffffff;
+      --max: 1240px;
+      --radius: 6px;
+      --ease: cubic-bezier(.2,.8,.2,1);
+    }
 
-/* ===== RESET ===== */
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth;-webkit-font-smoothing:antialiased}
-body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg1);color:var(--text1);overflow-x:hidden;line-height:1.6}
-img{max-width:100%;height:auto;display:block}
-a{color:inherit;text-decoration:none}
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: "Noto Sans SC", sans-serif;
+      line-height: 1.65;
+      overflow-x: hidden;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      pointer-events: none;
+      opacity: .025;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.9'/%3E%3C/svg%3E");
+    }
+    img { display: block; max-width: 100%; }
+    a { color: inherit; text-decoration: none; }
+    button { font: inherit; }
+    ::selection { color: var(--ink); background: var(--acid); }
+    :focus-visible { outline: 3px solid var(--acid-dark); outline-offset: 4px; }
 
-/* ===== NOISE ===== */
-body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;opacity:.015;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");background-size:180px}
+    .skip-link {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      z-index: 100;
+      padding: 10px 14px;
+      color: var(--white);
+      background: var(--ink);
+      transform: translateY(-160%);
+      transition: transform .2s;
+    }
+    .skip-link:focus { transform: translateY(0); }
+    .shell { width: min(calc(100% - 48px), var(--max)); margin-inline: auto; }
+    .kicker {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0 0 22px;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .kicker::before { content: ""; width: 34px; height: 3px; background: var(--acid-dark); }
+    .section-number { color: var(--muted); }
 
-/* ===== AMBIENT BG ===== */
-.bg-layer{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
-.bg-grid{position:absolute;inset:0;opacity:.35;background-image:linear-gradient(rgba(255,255,255,.01) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.01) 1px,transparent 1px);background-size:48px 48px}
-.bg-orb{position:absolute;border-radius:50%;filter:blur(120px);animation:orbFloat 35s ease-in-out infinite;will-change:transform}
-@keyframes orbFloat{0%,100%{transform:translate(0,0) scale(1)}25%{transform:translate(50px,-40px) scale(1.06)}50%{transform:translate(-30px,50px) scale(.94)}75%{transform:translate(40px,30px) scale(1.03)}}
+    .site-header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: rgba(243,244,238,.94);
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(14px);
+    }
+    .nav {
+      min-height: 72px;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 24px;
+    }
+    .brand { display: inline-flex; align-items: center; gap: 12px; font-weight: 900; width: max-content; }
+    .brand-mark {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      color: var(--ink);
+      background: var(--acid);
+      border: 1px solid var(--ink);
+      box-shadow: 3px 3px 0 var(--ink);
+    }
+    .nav-links { display: flex; gap: 30px; list-style: none; padding: 0; margin: 0; }
+    .nav-links a { font-size: 13px; font-weight: 600; }
+    .nav-links a:hover { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 5px; }
+    .nav-actions { display: flex; justify-content: flex-end; align-items: center; gap: 12px; }
+    .github-link { font-size: 20px; line-height: 1; }
+    .download-mini {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 14px;
+      background: var(--ink);
+      color: var(--white);
+      font-size: 12px;
+      font-weight: 700;
+      border: 1px solid var(--ink);
+      transition: transform .2s var(--ease), box-shadow .2s var(--ease);
+    }
+    .download-mini:hover { transform: translate(-2px,-2px); box-shadow: 4px 4px 0 var(--acid); }
+    .menu-button { display: none; width: 42px; height: 42px; padding: 0; border: 1px solid var(--ink); background: transparent; font-size: 22px; cursor: pointer; }
 
-/* ===== UTILITY ===== */
-.container{max-width:1200px;margin:0 auto;padding:0 32px}
-.section{padding:140px 0}
-.section-header{margin-bottom:72px}
-.section-header h2{font-family:'Space Grotesk',sans-serif;font-size:clamp(1.8rem,3.2vw,2.6rem);font-weight:700;letter-spacing:-.03em;line-height:1.15;margin-bottom:14px;color:var(--text1)}
-.section-header p{font-size:15px;color:var(--text2);max-width:480px;line-height:1.7}
-.accent{color:var(--accent)}
+    .hero { padding: 74px 0 92px; border-bottom: 1px solid var(--ink); }
+    .hero-grid { display: grid; grid-template-columns: minmax(0, .9fr) minmax(500px, 1.1fr); gap: 70px; align-items: center; }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 28px;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .status-dot { width: 9px; height: 9px; background: var(--acid-dark); border-radius: 50%; box-shadow: 0 0 0 5px rgba(127,168,0,.14); }
+    h1, h2, h3, p { text-wrap: pretty; }
+    .hero h1 {
+      max-width: 740px;
+      margin: 0;
+      font-size: 76px;
+      line-height: 1.02;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+    .hero h1 em { font-style: normal; background: linear-gradient(transparent 66%, var(--acid) 66%); }
+    .hero-copy { max-width: 620px; margin: 28px 0 0; color: var(--muted); font-size: 17px; }
+    .prerequisite {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 12px;
+      align-items: start;
+      max-width: 620px;
+      margin: 24px 0 0;
+      padding: 14px 16px;
+      color: var(--ink);
+      background: var(--acid);
+      border: 1px solid var(--ink);
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .prerequisite i { margin-top: 3px; font-size: 18px; }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
+    .button {
+      min-height: 52px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 0 22px;
+      border: 1px solid var(--ink);
+      font-weight: 700;
+      transition: transform .2s var(--ease), box-shadow .2s var(--ease), background .2s;
+    }
+    .button-primary { color: var(--white); background: var(--ink); }
+    .button-secondary { background: transparent; }
+    .button:hover { transform: translate(-3px,-3px); box-shadow: 6px 6px 0 var(--acid); }
+    .button:active { transform: translate(0,0); box-shadow: none; }
 
-/* ===== REVEAL ===== */
-.reveal{opacity:0;transform:translateY(40px);transition:all .9s cubic-bezier(.16,1,.3,1)}
-.reveal.visible{opacity:1;transform:translateY(0)}
-.d1{transition-delay:.08s}.d2{transition-delay:.16s}.d3{transition-delay:.24s}.d4{transition-delay:.32s}
+    .hero-media { position: relative; padding: 26px 0 0 26px; }
+    .hero-media::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      right: -24px;
+      bottom: 24px;
+      left: 0;
+      background: var(--acid);
+      border: 1px solid var(--ink);
+    }
+    .hero-shot { position: relative; margin: 0; border: 1px solid var(--ink); background: #090909; box-shadow: 14px 14px 0 rgba(17,19,15,.14); }
+    .hero-shot img { width: 100%; aspect-ratio: 16/10; object-fit: cover; object-position: left top; }
+    .shot-caption {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 11px 14px;
+      color: #d8dbd2;
+      background: var(--ink);
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 11px;
+    }
+    .shot-caption span:last-child { color: var(--acid); }
 
-/* ===== NAV ===== */
-nav{padding-top:20px;position:fixed;top:0;left:0;right:0;z-index:100;display:flex;justify-content:center;pointer-events:none}
-.nav-island{pointer-events:auto;display:flex;align-items:center;gap:8px;padding:6px 6px 6px 20px;border-radius:100px;background:rgba(17,22,46,.88);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);border:1px solid rgba(255,255,255,.06);box-shadow:0 8px 32px rgba(0,0,0,.5);max-width:calc(100vw - 40px)}
-.nav-logo{display:flex;align-items:center;gap:8px;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;color:rgba(255,255,255,.85);letter-spacing:-.02em;white-space:nowrap}
-.nav-logo i{font-size:16px;color:var(--accent)}
-.nav-links{display:flex;align-items:center;gap:2px;list-style:none;margin:0 16px}
-.nav-links a{padding:6px 14px;font-size:13px;font-weight:500;color:var(--text2);border-radius:6px;transition:color .3s;white-space:nowrap}
-.nav-links a:hover{color:var(--text1)}
-.nav-actions{display:flex;align-items:center;gap:6px}
-.nav-actions .btn{padding:7px 18px;border-radius:100px;background:linear-gradient(135deg,#22d3ee,#0891b2);color:#08051a;font-size:13px;font-weight:600;font-family:inherit;border:none;cursor:pointer;transition:all .3s cubic-bezier(.16,1,.3,1);white-space:nowrap;display:flex;align-items:center;gap:6px}
-.nav-actions .btn:hover{transform:translateY(-1px);box-shadow:0 4px 24px rgba(34,211,238,.25)}
-.nav-toggle{display:none;background:none;border:none;color:#fff;cursor:pointer;width:34px;height:34px;position:relative;border-radius:50%;align-items:center;justify-content:center;flex-shrink:0}
-.nav-toggle span{display:block;width:18px;height:1.5px;background:rgba(255,255,255,.4);border-radius:2px;position:absolute;left:8px;transition:all .35s cubic-bezier(.16,1,.3,1)}
-.nav-toggle span:nth-child(1){top:11px}
-.nav-toggle span:nth-child(2){top:16px;width:12px}
-.nav-toggle span:nth-child(3){top:21px}
-.nav-toggle.active span:nth-child(1){top:16px;transform:rotate(45deg);width:18px}
-.nav-toggle.active span:nth-child(2){opacity:0;transform:translateX(8px)}
-.nav-toggle.active span:nth-child(3){top:16px;transform:rotate(-45deg);width:18px}
+    .ticker { overflow: hidden; border-bottom: 1px solid var(--ink); background: var(--acid); }
+    .ticker-track { width: max-content; display: flex; animation: ticker 24s linear infinite; }
+    .ticker span { padding: 13px 28px; font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 600; white-space: nowrap; }
+    .ticker span::after { content: "↗"; margin-left: 28px; }
+    @keyframes ticker { to { transform: translateX(-50%); } }
 
-/* ===== MOBILE OVERLAY ===== */
-.nav-overlay{position:fixed;top:0;left:0;right:0;bottom:0;z-index:99;background:rgba(7,11,26,.93);-webkit-backdrop-filter:blur(40px);backdrop-filter:blur(40px);opacity:0;pointer-events:none;transition:opacity .5s cubic-bezier(.16,1,.3,1);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:20px}
-.nav-overlay.open{opacity:1;pointer-events:auto}
-.nav-overlay a{padding:16px 24px;font-size:22px;font-weight:600;color:var(--text2);transition:color .4s;font-family:'Space Grotesk',sans-serif;letter-spacing:-.02em}
-.nav-overlay a:hover{color:var(--text1)}
-.nav-overlay .btn{display:inline-flex;align-items:center;gap:10px;margin-top:24px;padding:14px 32px;border-radius:100px;background:linear-gradient(135deg,#22d3ee,#0891b2);color:#08051a;font-size:15px;font-weight:600;font-family:inherit;border:none;cursor:pointer}
+    .section { padding: 120px 0 136px; border-bottom: 1px solid var(--line); }
+    .section-intro { display: grid; grid-template-columns: .8fr 1.2fr; gap: 60px; margin-bottom: 72px; align-items: end; }
+    .section-intro h2 { margin: 0; font-size: 54px; line-height: 1.08; font-weight: 900; }
+    .section-intro p { max-width: 560px; margin: 0 0 5px; color: var(--muted); font-size: 16px; }
 
-/* ===== HERO ===== */
-.hero{min-height:100dvh;display:flex;align-items:center;padding-top:100px;position:relative;overflow:hidden}
-.hero::before{content:'';position:absolute;top:-40%;right:-15%;width:800px;height:800px;border-radius:50%;background:radial-gradient(circle,rgba(34,211,238,.05) 0%,rgba(217,70,239,.03) 40%,transparent 70%);pointer-events:none}
-.hero::after{content:'';position:absolute;bottom:-30%;left:-10%;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(245,158,11,.04) 0%,rgba(139,92,246,.03) 40%,transparent 70%);pointer-events:none}
-.hero-grid{display:grid;grid-template-columns:1fr 1fr;gap:80px;max-width:1200px;margin:0 auto;padding:0 32px;width:100%;align-items:center;position:relative;z-index:1}
-.hero-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 14px 5px 12px;border-radius:100px;background:rgba(34,211,238,.06);border:1px solid rgba(34,211,238,.12);font-size:11px;font-weight:600;color:var(--cyan);letter-spacing:.02em;margin-bottom:32px}
-.hero h1{font-family:'Space Grotesk','Plus Jakarta Sans',sans-serif;font-size:clamp(2.6rem,5.5vw,4.2rem);font-weight:700;letter-spacing:-.04em;line-height:1.06;margin-bottom:18px}
-.hero h1 .em{background:linear-gradient(135deg,#22d3ee,#f59e0b,#d946ef);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.hero p{font-size:15px;color:var(--text2);max-width:440px;line-height:1.8;margin-bottom:18px}
-.network-notice{display:flex;align-items:flex-start;gap:9px;max-width:440px;margin-bottom:32px;padding:11px 14px;border:1px solid rgba(245,158,11,.65);border-radius:6px;background:rgba(245,158,11,.16);color:#fff;font-size:14px;font-weight:600;line-height:1.65}
-.network-notice i{color:#fbbf24;font-size:17px;line-height:1.4;flex-shrink:0}
-.network-notice strong{color:#fbbf24}
-.hero-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.btn{display:inline-flex;align-items:center;gap:10px;padding:13px 26px;border-radius:100px;font-size:14px;font-weight:600;font-family:'Plus Jakarta Sans',sans-serif;cursor:pointer;transition:all .35s cubic-bezier(.16,1,.3,1);border:none;text-decoration:none}
-.btn:active{transform:scale(.97)}
-.btn-primary{background:linear-gradient(135deg,#f59e0b,#d97706);color:#070b1a;position:relative;overflow:hidden}
-.btn-primary::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.2),transparent);opacity:0;transition:opacity .35s;border-radius:inherit}
-.btn-primary:hover::before{opacity:1}
-.btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(245,158,11,.25)}
-.btn-primary .btn-icon{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:rgba(0,0,0,.1);font-size:13px;transition:all .35s cubic-bezier(.16,1,.3,1);flex-shrink:0}
-.btn-primary:hover .btn-icon{transform:translateX(3px) translateY(-1px)}
-.btn-ghost{background:rgba(255,255,255,.04);color:var(--text2);border:1px solid var(--border)}
-.btn-ghost:hover{background:rgba(255,255,255,.06);color:var(--text1);border-color:rgba(255,255,255,.08)}
+    .process { border-top: 1px solid var(--ink); }
+    .process-item {
+      display: grid;
+      grid-template-columns: 90px 1fr 1fr;
+      gap: 34px;
+      align-items: center;
+      min-height: 150px;
+      border-bottom: 1px solid var(--ink);
+      transition: background .25s, padding .25s var(--ease);
+    }
+    .process-item:hover { padding-inline: 18px; background: var(--acid); }
+    .process-index { font-family: "Archivo Black", sans-serif; font-size: 34px; }
+    .process-item h3 { margin: 0; font-size: 28px; line-height: 1.2; }
+    .process-item p { max-width: 500px; margin: 0; color: var(--muted); font-size: 14px; }
+    .process-item:hover p { color: var(--ink); }
 
-/* Hero Terminal */
-.hero-visual{display:flex;align-items:center;justify-content:center;position:relative}
-.hero-visual::before{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:90%;height:90%;background:radial-gradient(circle,rgba(245,158,11,.06) 0%,transparent 70%);pointer-events:none}
-.hero-terminal{width:100%;max-width:520px;border-radius:16px;position:relative;z-index:1;box-shadow:0 32px 80px rgba(0,0,0,.5),0 0 0 1px rgba(34,211,238,.04)}
-.hero-terminal .inner{border-radius:16px;background:linear-gradient(160deg,var(--surface),var(--bg2));border:1px solid rgba(255,255,255,.04);overflow:hidden;position:relative}
-.hero-terminal .inner::before{content:'';position:absolute;inset:0;border-radius:16px;padding:1px;background:linear-gradient(135deg,rgba(34,211,238,.08),rgba(217,70,239,.04),rgba(245,158,11,.08));-webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none}
-.terminal-header{display:flex;align-items:center;gap:8px;padding:14px 18px;border-bottom:1px solid var(--border)}
-.terminal-dot{width:10px;height:10px;border-radius:50%}
-.terminal-dot:nth-child(1){background:#ef4444}
-.terminal-dot:nth-child(2){background:#eab308}
-.terminal-dot:nth-child(3){background:#22c55e}
-.terminal-title{font-size:11px;color:var(--text3);margin-left:10px;font-weight:500;font-family:'JetBrains Mono',monospace}
-.terminal-body{padding:22px 24px;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:2;color:var(--text2)}
-.terminal-body .arrow{color:var(--cyan)}
-.terminal-body .data{color:var(--text1)}
-.terminal-body .ok{color:#34d399}
-.terminal-body .dim{color:var(--text3)}
-.terminal-body .highlight{color:#fbbf24}
-.terminal-body .key{color:var(--fuchsia)}
-.terminal-body .divider{color:var(--border)}
-.pulse-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);margin-right:6px;animation:pulse 2s ease-in-out infinite;vertical-align:middle}
-@keyframes pulse{0%,100%{opacity:1;transform:scale(1);box-shadow:0 0 0 0 rgba(245,158,11,.3)}50%{opacity:.5;transform:scale(.85);box-shadow:0 0 0 6px rgba(245,158,11,0)}}
+    .proof { color: var(--white); background: var(--ink); border-color: #2d3029; }
+    .proof .section-number, .proof .section-intro p { color: #aeb3a8; }
+    .proof .kicker::before { background: var(--acid); }
+    .proof-grid { display: grid; grid-template-columns: 1.38fr .62fr; gap: 22px; align-items: start; }
+    .proof-figure { margin: 0; background: #090a08; border: 1px solid #41453c; overflow: hidden; }
+    .proof-figure.desktop img { width: 100%; aspect-ratio: 16/9; object-fit: cover; object-position: left top; }
+    .proof-side { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .proof-figure.phone img { width: 100%; aspect-ratio: 9/16; object-fit: cover; object-position: top; }
+    .proof-figure figcaption { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; color: #bfc4b9; font-family: "IBM Plex Mono", monospace; font-size: 11px; border-top: 1px solid #41453c; }
+    .proof-figure figcaption b { color: var(--acid); font-weight: 500; }
+    .proof-note { margin-top: 26px; color: #aeb3a8; font-size: 13px; font-family: "IBM Plex Mono", monospace; }
 
-/* ===== FEATURES ===== */
-.features-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.feature-shell{padding:1px;border-radius:14px;background:linear-gradient(135deg,rgba(255,255,255,.03),rgba(255,255,255,.01));transition:all .5s cubic-bezier(.16,1,.3,1)}
-.feature-shell:hover{background:linear-gradient(135deg,rgba(245,158,11,.1),rgba(99,102,241,.04));transform:translateY(-4px);box-shadow:0 12px 40px rgba(0,0,0,.2)}
-.feature-core{padding:36px;border-radius:13px;background:var(--surface);height:100%;border:1px solid rgba(255,255,255,.02);transition:all .5s cubic-bezier(.16,1,.3,1)}
-.feature-shell:hover .feature-core{background:var(--surface2)}
-.feature-core .icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:22px;transition:all .4s cubic-bezier(.16,1,.3,1)}
-.feature-shell:hover .icon{transform:scale(1.05)}
-.feature-shell:nth-child(4n+1) .icon{color:var(--cyan);background:rgba(34,211,238,.06);border:1px solid rgba(34,211,238,.1)}
-.feature-shell:nth-child(4n+1):hover .icon{background:rgba(34,211,238,.1);border-color:rgba(34,211,238,.18)}
-.feature-shell:nth-child(4n+1):hover{background:linear-gradient(135deg,rgba(34,211,238,.08),rgba(139,92,246,.03))}
-.feature-shell:nth-child(4n+2) .icon{color:var(--fuchsia);background:rgba(217,70,239,.06);border:1px solid rgba(217,70,239,.1)}
-.feature-shell:nth-child(4n+2):hover .icon{background:rgba(217,70,239,.1);border-color:rgba(217,70,239,.18)}
-.feature-shell:nth-child(4n+2):hover{background:linear-gradient(135deg,rgba(217,70,239,.08),rgba(34,211,238,.03))}
-.feature-shell:nth-child(4n+3) .icon{color:var(--accent);background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.1)}
-.feature-shell:nth-child(4n+3):hover .icon{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.18)}
-.feature-shell:nth-child(4n+3):hover{background:linear-gradient(135deg,rgba(245,158,11,.08),rgba(34,211,238,.03))}
-.feature-shell:nth-child(4n+4) .icon{color:var(--violet);background:rgba(139,92,246,.06);border:1px solid rgba(139,92,246,.1)}
-.feature-shell:nth-child(4n+4):hover .icon{background:rgba(139,92,246,.1);border-color:rgba(139,92,246,.18)}
-.feature-shell:nth-child(4n+4):hover{background:linear-gradient(135deg,rgba(139,92,246,.08),rgba(245,158,11,.03))}
-.feature-core h3{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;margin-bottom:8px;letter-spacing:-.01em;color:var(--text1)}
-.feature-core p{font-size:13px;color:var(--text2);line-height:1.7}
+    .feature-layout { display: grid; grid-template-columns: .84fr 1.16fr; gap: 80px; align-items: start; }
+    .feature-lead { position: sticky; top: 118px; }
+    .feature-lead h2 { margin: 0; font-size: 54px; line-height: 1.08; font-weight: 900; }
+    .feature-lead p { max-width: 420px; margin: 24px 0 0; color: var(--muted); }
+    .feature-list { border-top: 1px solid var(--ink); }
+    .feature-row { display: grid; grid-template-columns: 54px 1fr; gap: 18px; padding: 30px 0 34px; border-bottom: 1px solid var(--ink); }
+    .feature-row i { font-size: 28px; }
+    .feature-row h3 { margin: 0 0 8px; font-size: 21px; }
+    .feature-row p { margin: 0; color: var(--muted); font-size: 14px; }
 
-/* ===== SCREENSHOTS ===== */
-.sc-section{background:linear-gradient(180deg,transparent,rgba(34,211,238,.015),rgba(217,70,239,.015),transparent)}
-.sc-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:960px;margin:0 auto}
-.sc-card{border-radius:14px;overflow:hidden;background:var(--surface);border:1px solid var(--border);transition:all .5s cubic-bezier(.16,1,.3,1)}
-.sc-card:nth-child(1):hover{border-color:rgba(34,211,238,.12)}
-.sc-card:nth-child(2):hover{border-color:rgba(217,70,239,.12)}
-.sc-card:nth-child(3):hover{border-color:rgba(245,158,11,.12)}
-.sc-card:hover{transform:translateY(-3px);box-shadow:0 16px 48px rgba(0,0,0,.3)}
-.sc-card .img-wrap{background:linear-gradient(135deg,rgba(245,158,11,.03),rgba(245,158,11,.01));display:flex;align-items:center;justify-content:center;overflow:hidden}
-.sc-card .img-wrap img{width:100%;height:100%;object-fit:contain;border-radius:4px;transition:transform .6s cubic-bezier(.16,1,.3,1)}
-.sc-card:hover .img-wrap img{transform:scale(1.02)}
-.sc-card .cap{padding:20px 24px}
-.sc-card .cap h4{font-size:14px;font-weight:600;margin-bottom:3px;color:var(--text1)}
-.sc-card .cap p{font-size:12px;color:var(--text2)}
-.sc-card.sphone .img-wrap{aspect-ratio:9/17;min-height:380px;max-height:560px;padding:16px}
-.sc-card.sphone .img-wrap img{max-height:500px}
-.sc-card.screen .img-wrap{aspect-ratio:16/10;min-height:300px;padding:16px}
-.sc-card.screen{grid-column:1/-1;max-width:720px;margin:0 auto;width:100%}
+    .guide { background: var(--paper-deep); }
+    .guide-grid { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--ink); border-left: 1px solid var(--ink); }
+    .guide-step { min-height: 330px; display: flex; flex-direction: column; padding: 26px; border-right: 1px solid var(--ink); border-bottom: 1px solid var(--ink); }
+    .guide-step-number { font-family: "Archivo Black", sans-serif; font-size: 68px; line-height: 1; color: transparent; -webkit-text-stroke: 1px var(--ink); }
+    .guide-step h3 { margin: auto 0 12px; font-size: 20px; }
+    .guide-step p { min-height: 72px; margin: 0; color: var(--muted); font-size: 13px; }
+    .guide-step code { color: var(--ink); background: var(--acid); font-family: "IBM Plex Mono", monospace; }
+    .guide-warning { display: flex; align-items: flex-start; gap: 12px; margin-top: 26px; padding: 18px; border-left: 5px solid var(--acid-dark); background: var(--paper); font-size: 13px; }
+    .guide-warning i { font-size: 20px; }
 
-/* ===== TUTORIAL ===== */
-.t-section{background:linear-gradient(180deg,transparent,rgba(139,92,246,.02),rgba(245,158,11,.01),transparent);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
-.t-steps{max-width:720px;margin:0 auto}
-.t-step{display:grid;grid-template-columns:44px 1fr;gap:24px;padding:32px 0;position:relative}
-.t-step+.t-step{border-top:1px solid var(--border)}
-.t-step:nth-child(1) .t-step-num{background:rgba(34,211,238,.08);border-color:rgba(34,211,238,.12);color:var(--cyan)}
-.t-step:nth-child(2) .t-step-num{background:rgba(217,70,239,.08);border-color:rgba(217,70,239,.12);color:var(--fuchsia)}
-.t-step:nth-child(3) .t-step-num{background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.12);color:var(--accent)}
-.t-step:nth-child(4) .t-step-num{background:rgba(139,92,246,.08);border-color:rgba(139,92,246,.12);color:var(--violet)}
-.t-step-num{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;font-family:'Space Grotesk',sans-serif;margin-top:2px}
-.t-step-body h3{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:600;margin-bottom:10px;letter-spacing:-.01em;color:var(--text1)}
-.t-step-body p{font-size:14px;color:var(--text2);line-height:1.7;margin-bottom:8px}
-.t-step-body p:last-child{margin-bottom:0}
-.t-step-body code{font-family:'JetBrains Mono',monospace;color:#fbbf24;font-size:13px;background:rgba(245,158,11,.06);padding:1px 6px;border-radius:4px}
-.t-step-body ol{padding-left:18px;margin-bottom:8px;font-size:14px;color:var(--text2);line-height:1.8}
-.t-step-body ol li::marker{color:var(--accent)}
-.t-note{display:flex;align-items:flex-start;gap:10px;padding:14px 18px;border-radius:10px;background:rgba(245,158,11,.04);border:1px solid rgba(245,158,11,.06);font-size:13px;color:var(--text2);line-height:1.6;margin-top:12px}
-.t-note i{color:var(--accent);margin-top:3px;flex-shrink:0;font-size:15px}
-.t-warn{display:flex;align-items:flex-start;gap:10px;padding:14px 18px;border-radius:10px;background:rgba(251,191,36,.04);border:1px solid rgba(251,191,36,.08);font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:12px}
-.t-warn i{color:#fbbf24;margin-top:3px;flex-shrink:0;font-size:15px}
-.t-code{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text2);background:rgba(255,255,255,.015);border:1px solid var(--border);border-radius:10px;padding:16px 20px;margin-bottom:10px;line-height:2}
+    .command-layout { display: grid; grid-template-columns: .72fr 1.28fr; gap: 72px; }
+    .command-layout h2 { margin: 0; font-size: 54px; line-height: 1.08; }
+    .command-layout .lead { color: var(--muted); margin: 22px 0 0; }
+    .commands { background: var(--ink); border: 1px solid var(--ink); }
+    .command-row { display: grid; grid-template-columns: minmax(170px, .7fr) 1.3fr; gap: 20px; padding: 18px 22px; color: var(--white); border-bottom: 1px solid #3b3e37; }
+    .command-row:last-child { border-bottom: 0; }
+    .command-row code { color: var(--acid); font-family: "IBM Plex Mono", monospace; font-size: 13px; }
+    .command-row span { color: #b7bcb1; font-size: 13px; }
 
-/* ===== COMMANDS ===== */
-.cmd-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;max-width:800px;margin:0 auto}
-.cmd-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 20px;border-radius:10px;background:var(--surface);border:1px solid var(--border);transition:all .35s cubic-bezier(.16,1,.3,1)}
-.cmd-item:nth-child(4n+1):hover{border-color:rgba(34,211,238,.1)}
-.cmd-item:nth-child(4n+2):hover{border-color:rgba(217,70,239,.1)}
-.cmd-item:nth-child(4n+3):hover{border-color:rgba(245,158,11,.1)}
-.cmd-item:nth-child(4n+4):hover{border-color:rgba(139,92,246,.1)}
-.cmd-item:hover{background:var(--surface2)}
-.cmd-item code{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;color:#fbbf24}
-.cmd-item span{font-size:12px;color:var(--text2);white-space:nowrap}
+    .final-cta { padding: 90px 0; background: var(--acid); border-bottom: 1px solid var(--ink); }
+    .cta-grid { display: grid; grid-template-columns: 1fr auto; gap: 48px; align-items: end; }
+    .final-cta h2 { max-width: 800px; margin: 0; font-size: 64px; line-height: 1.05; font-weight: 900; }
+    .final-cta p { max-width: 620px; margin: 22px 0 0; }
+    .final-cta .button:hover { box-shadow: 6px 6px 0 var(--white); }
 
-/* ===== DOWNLOAD ===== */
-.dl-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:700px;margin:0 auto}
-.dl-shell{padding:1px;border-radius:14px;background:linear-gradient(135deg,rgba(255,255,255,.03),rgba(255,255,255,.01));transition:all .5s cubic-bezier(.16,1,.3,1)}
-.dl-shell:hover{background:linear-gradient(135deg,rgba(245,158,11,.1),rgba(99,102,241,.04));transform:translateY(-4px);box-shadow:0 12px 40px rgba(0,0,0,.2)}
-.dl-core{padding:48px 40px;border-radius:13px;background:var(--surface);text-align:center;border:1px solid rgba(255,255,255,.02);transition:all .5s}
-.dl-shell:hover .dl-core{background:var(--surface2)}
-.dl-core .icon{width:52px;height:52px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:24px;margin:0 auto 22px;transition:all .4s cubic-bezier(.16,1,.3,1)}
-.dl-shell:nth-child(1) .icon{background:rgba(34,211,238,.06);border:1px solid rgba(34,211,238,.1);color:var(--cyan)}
-.dl-shell:nth-child(2) .icon{background:rgba(217,70,239,.06);border:1px solid rgba(217,70,239,.1);color:var(--fuchsia)}
-.dl-shell:nth-child(1):hover {background:linear-gradient(135deg,rgba(34,211,238,.1),rgba(245,158,11,.04))}
-.dl-shell:nth-child(2):hover {background:linear-gradient(135deg,rgba(217,70,239,.1),rgba(139,92,246,.04))}
-.dl-core h3{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:600;margin-bottom:6px;color:var(--text1)}
-.dl-core p{font-size:13px;color:var(--text2);margin-bottom:28px}
-.dl-core .btn{display:inline-flex;align-items:center;gap:10px;padding:12px 28px;border-radius:100px;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;transition:all .35s cubic-bezier(.16,1,.3,1);border:none;text-decoration:none;justify-content:center}
-.dl-core .btn:active{transform:scale(.97)}
-.dl-core .btn-primary{background:linear-gradient(135deg,#f59e0b,#d97706);color:#070b1a}
-.dl-core .btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(245,158,11,.25)}
-.dl-core .btn-ghost{background:rgba(255,255,255,.04);color:var(--text2);border:1px solid var(--border)}
-.dl-core .btn-ghost:hover{background:rgba(255,255,255,.06);color:var(--text1);border-color:rgba(255,255,255,.08)}
+    footer { padding: 34px 0 42px; background: var(--ink); color: var(--white); }
+    .footer-top { display: flex; justify-content: space-between; gap: 30px; align-items: center; }
+    .footer-links { display: flex; gap: 24px; }
+    .footer-links a { color: #b8bdb2; font-size: 13px; }
+    .footer-links a:hover { color: var(--acid); }
+    .disclaimer { margin: 30px 0 0; padding-top: 24px; color: #777d72; border-top: 1px solid #34372f; font-size: 11px; }
 
-/* ===== FOOTER ===== */
-footer{background:linear-gradient(180deg,transparent,rgba(34,211,238,.015));border-top:1px solid var(--border);padding:56px 0}
-.footer-inner{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;max-width:1200px;margin:0 auto;padding:0 32px}
-.footer-inner .copy{font-size:13px;color:var(--text3)}
-.footer-links{display:flex;align-items:center;gap:20px}
-.footer-links a{font-size:13px;color:var(--text3);transition:color .35s}
-.footer-links a:nth-child(1):hover{color:var(--cyan)}
-.footer-links a:nth-child(2):hover{color:var(--accent)}
-.footer-links a:nth-child(3):hover{color:var(--fuchsia)}
-.footer-disc{max-width:1200px;margin:20px auto 0;padding:0 32px;font-size:12px;color:var(--text3);text-align:center;line-height:1.7}
+    .reveal { opacity: 0; transform: translateY(24px); transition: opacity .7s var(--ease), transform .7s var(--ease); }
+    .reveal.is-visible { opacity: 1; transform: translateY(0); }
 
-/* ===== RESPONSIVE ===== */
-@media(max-width:1024px){
-  .hero-grid{gap:48px}
-}
-@media(max-width:900px){
-  .hero-grid{grid-template-columns:1fr;gap:40px;text-align:center}
-  .hero p{margin:0 auto 18px;max-width:500px}
-  .network-notice{margin-left:auto;margin-right:auto;text-align:left}
-  .hero-actions{justify-content:center}
-  .hero-visual{display:none}
-  .hero::before,.hero::after{display:none}
-  .features-grid{grid-template-columns:1fr}
-  .section{padding:100px 0}
-  .sc-grid{grid-template-columns:1fr}
-  .cmd-grid{grid-template-columns:1fr}
-  .dl-grid{grid-template-columns:1fr}
-  .section-header p{margin:0 auto}
-}
-@media(max-width:768px){
-  .container{padding:0 20px}
-  .section{padding:80px 0}
-  .nav-island{padding:5px 5px 5px 16px;gap:4px;width:calc(100vw - 32px);justify-content:space-between}
-  .nav-links{display:none}
-  .nav-toggle{display:flex}
-  .nav-actions .btn{padding:7px 16px;font-size:12px}
-  .nav-actions .btn span{display:none}
-  .hero h1{font-size:clamp(2rem,8vw,2.8rem)}
-  .section-header{text-align:center}
-  .footer-inner{flex-direction:column;text-align:center}
-  .footer-links{justify-content:center}
-  .t-step{grid-template-columns:1fr;gap:12px}
-  .t-step-num{display:none}
-  .sc-card.sphone .img-wrap{min-height:300px}
-  .sc-card.screen .img-wrap{min-height:220px}
-}
-@media(max-width:480px){
-  .hero{padding-top:80px}
-  .hero-actions{flex-direction:column;width:100%}
-  .hero-actions .btn,.hero-actions .btn-ghost{width:100%;justify-content:center}
-  .nav-island{width:calc(100vw - 24px)}
-  .dl-grid{gap:16px}
-}
-@media(prefers-reduced-motion:reduce){
-  .reveal{opacity:1;transform:none;transition:none}
-  .pulse-dot,.bg-orb{animation:none}
-  .feature-shell:hover,.sc-card:hover,.dl-shell:hover{transform:none}
-  .feature-shell:hover .icon,.sc-card:hover img,.btn-primary:hover .btn-icon{transform:none}
-}
-</style>
+    @media (max-width: 1040px) {
+      .hero-grid { grid-template-columns: minmax(0, 1fr); }
+      .hero-content, .hero-media { min-width: 0; }
+      .hero-copy { max-width: 760px; }
+      .hero-media { max-width: 820px; }
+      .proof-grid { grid-template-columns: 1fr; }
+      .proof-side { max-width: 560px; }
+      .guide-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 760px) {
+      .shell { width: min(calc(100% - 32px), var(--max)); }
+      .nav { grid-template-columns: 1fr auto; min-height: 64px; }
+      .menu-button { display: grid; place-items: center; }
+      .nav-links {
+        position: absolute;
+        top: 64px;
+        left: 0;
+        right: 0;
+        display: none;
+        flex-direction: column;
+        gap: 0;
+        padding: 10px 16px 18px;
+        background: var(--paper);
+        border-bottom: 1px solid var(--ink);
+      }
+      .nav-links.is-open { display: flex; }
+      .nav-links a { display: block; padding: 14px 0; border-bottom: 1px solid var(--line); }
+      .nav-actions { display: none; }
+      .hero { padding: 52px 0 70px; }
+      .hero-grid { gap: 48px; }
+      .hero h1 { font-size: 46px; }
+      .hero-copy { font-size: 15px; }
+      .hero-media { padding: 14px 0 0 14px; }
+      .hero-media::before { right: -10px; bottom: 12px; }
+      .hero-shot img { aspect-ratio: 4/3; }
+      .hero-actions { flex-direction: column; }
+      .button { width: 100%; }
+      .section { padding: 82px 0 92px; }
+      .section-intro, .feature-layout, .command-layout { grid-template-columns: 1fr; gap: 30px; }
+      .section-intro { margin-bottom: 48px; }
+      .section-intro h2, .feature-lead h2, .command-layout h2 { font-size: 38px; }
+      .process-item { grid-template-columns: 58px 1fr; gap: 12px; padding: 28px 0; }
+      .process-item p { grid-column: 2; }
+      .process-item:hover { padding-inline: 10px; }
+      .proof-side { grid-template-columns: 1fr 1fr; gap: 10px; }
+      .feature-lead { position: static; }
+      .guide-grid { grid-template-columns: 1fr; }
+      .guide-step { min-height: 250px; }
+      .command-row { grid-template-columns: 1fr; gap: 6px; }
+      .cta-grid { grid-template-columns: 1fr; align-items: start; }
+      .final-cta h2 { font-size: 42px; }
+      .footer-top { align-items: flex-start; flex-direction: column; }
+      .footer-links { flex-wrap: wrap; }
+    }
+
+    @media (max-width: 420px) {
+      .brand span:last-child { font-size: 14px; }
+      .hero h1 { font-size: 39px; }
+      .prerequisite { font-size: 13px; }
+      .proof-side { grid-template-columns: 1fr; }
+      .proof-figure.phone img { aspect-ratio: 3/4; object-position: top; }
+      .process-item h3 { font-size: 23px; }
+      .final-cta h2 { font-size: 36px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+      .reveal { opacity: 1; transform: none; }
+    }
+  </style>
 </head>
 <body>
+  <a class="skip-link" href="#main">跳到主要内容</a>
 
-<!-- ===== AMBIENT BG ===== -->
-<div class="bg-layer">
-  <div class="bg-grid"></div>
-  <div class="bg-orb" style="width:600px;height:600px;top:-15%;right:10%;background:radial-gradient(circle,rgba(34,211,238,.07) 0%,transparent 70%);animation-delay:0s"></div>
-  <div class="bg-orb" style="width:500px;height:500px;bottom:20%;left:-5%;background:radial-gradient(circle,rgba(217,70,239,.06) 0%,transparent 70%);animation-delay:-8s"></div>
-  <div class="bg-orb" style="width:400px;height:400px;top:10%;left:15%;background:radial-gradient(circle,rgba(245,158,11,.06) 0%,transparent 70%);animation-delay:-16s"></div>
-  <div class="bg-orb" style="width:500px;height:500px;top:50%;right:-10%;background:radial-gradient(circle,rgba(139,92,246,.05) 0%,transparent 70%);animation-delay:-24s"></div>
-  <div class="bg-orb" style="width:350px;height:350px;bottom:35%;left:40%;background:radial-gradient(circle,rgba(16,185,129,.05) 0%,transparent 70%);animation-delay:-32s"></div>
-</div>
-
-<!-- ===== NAV ===== -->
-<nav>
-  <div class="nav-island">
-    <a href="#" class="nav-logo"><i class="ri-bar-chart-2-line"></i> Score Monitor</a>
-    <ul class="nav-links">
-      <li><a href="#features">功能</a></li>
-      <li><a href="#screenshots">预览</a></li>
-      <li><a href="#tutorial">教程</a></li>
-      <li><a href="#download">下载</a></li>
-    </ul>
-    <div class="nav-actions">
-      <a href="https://github.com/Dvesiz/score-monitor/releases/latest/download/default.exe" class="btn"><i class="ri-download-2-line"></i><span>下载</span></a>
-      <button class="nav-toggle" id="navToggle" aria-label="菜单"><span></span><span></span><span></span></button>
-    </div>
-  </div>
-</nav>
-<div class="nav-overlay" id="navOverlay">
-  <a href="#features">功能</a>
-  <a href="#screenshots">预览</a>
-  <a href="#tutorial">教程</a>
-  <a href="#download">下载</a>
-  <a href="https://github.com/Dvesiz/score-monitor/releases/latest/download/default.exe" class="btn"><i class="ri-download-2-line"></i> 下载</a>
-</div>
-
-<!-- ===== HERO ===== -->
-<section class="hero">
-  <div class="hero-grid">
-    <div class="hero-left reveal">
-      <div class="hero-badge"><i class="ri-flashlight-line"></i> v1.0 · 开源免费</div>
-      <h1>
-        成绩发布<br>
-        <span class="em">一秒都不错过</span>
-      </h1>
-      <p>自动监控正方教务系统，检测到新成绩时通过 Bark 实时推送到手机。支持验证码识别、智能对比、多账号切换。</p>
-      <div class="network-notice"><i class="ri-shield-check-line"></i><span><strong>使用前提：</strong>需连接校园内网；校外请先登录学校 VPN，并保持 VPN 连接。</span></div>
-      <div class="hero-actions">
-        <a href="https://github.com/Dvesiz/score-monitor/releases/latest/download/default.exe" class="btn btn-primary" target="_blank" rel="noopener">
-          下载 default.exe
-          <span class="btn-icon"><i class="ri-arrow-right-line"></i></span>
-        </a>
-        <a href="https://github.com/Dvesiz/score-monitor" class="btn btn-ghost" target="_blank" rel="noopener">
-          <i class="ri-github-fill"></i> GitHub
-        </a>
+  <header class="site-header">
+    <nav class="nav shell" aria-label="主导航">
+      <a class="brand" href="#top" aria-label="Score Monitor 首页">
+        <span class="brand-mark"><i class="ri-pulse-line"></i></span>
+        <span>Score Monitor</span>
+      </a>
+      <ul class="nav-links" id="navLinks">
+        <li><a href="#workflow">工作方式</a></li>
+        <li><a href="#preview">产品实拍</a></li>
+        <li><a href="#guide">使用教程</a></li>
+        <li><a href="#commands">命令参考</a></li>
+      </ul>
+      <div class="nav-actions">
+        <a class="github-link" href="https://github.com/Dvesiz/score-monitor" target="_blank" rel="noopener" aria-label="打开 GitHub 仓库"><i class="ri-github-fill"></i></a>
+        <a class="download-mini" href="https://github.com/Dvesiz/score-monitor/releases/latest/download/default.exe"><i class="ri-download-line"></i> 下载程序</a>
       </div>
-    </div>
-    <div class="hero-visual reveal d2">
-      <div class="hero-terminal">
-        <div class="inner">
-          <div class="terminal-header">
-            <div class="terminal-dot"></div>
-            <div class="terminal-dot"></div>
-            <div class="terminal-dot"></div>
-            <span class="terminal-title">default.exe</span>
-          </div>
-          <div class="terminal-body">
-            <span class="arrow">♦</span> 启动监控程序 v1.0<br>
-            <span class="divider">━━━━━━━━━━━━━━━━━━━━━━</span>
-            学号: <span class="data">2021******</span><br>
-            密码: <span class="key">••••••••</span><br>
-            学年: <span class="data">2025-2026</span> · 学期: <span class="data">2</span><br>
-            Bark Key: <span class="key">配置已读取 ✓</span><br>
-            <span class="divider">━━━━━━━━━━━━━━━━━━━━━━</span>
-            <span class="ok">✓</span> 登录成功 <span class="dim">(1.2s)</span><br>
-            <span class="ok">✓</span> 查询到 <span class="highlight">8</span> 门已发布成绩<br>
-            <span class="ok">✓</span> 缓存更新完成 <span class="dim">(本次无变化)</span><br>
-            <br>
-            <span class="pulse-dot"></span> 下一轮检查: <span class="highlight">5 分钟后</span>
+      <button class="menu-button" id="menuButton" type="button" aria-label="打开菜单" aria-expanded="false" aria-controls="navLinks"><i class="ri-menu-3-line"></i></button>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="top">
+      <div class="hero-grid shell">
+        <div class="hero-content reveal">
+          <div class="eyebrow"><span class="status-dot"></span> OPEN SOURCE / WINDOWS</div>
+          <h1>成绩发布，<br><em>不必反复刷新。</em></h1>
+          <p class="hero-copy">自动登录教务系统、定时查询成绩变化，并在新成绩出现时通过 Bark 推送到你的 iPhone。</p>
+          <div class="prerequisite"><i class="ri-wifi-line"></i><span><strong>使用前提：</strong>需连接校园内网；校外使用请先登录学校 VPN，并保持连接。</span></div>
+          <div class="hero-actions">
+            <a class="button button-primary" href="https://github.com/Dvesiz/score-monitor/releases/latest/download/default.exe"><i class="ri-windows-fill"></i> 下载 default.exe <i class="ri-arrow-right-up-line"></i></a>
+            <a class="button button-secondary" href="https://github.com/Dvesiz/score-monitor" target="_blank" rel="noopener"><i class="ri-github-fill"></i> 查看源代码</a>
           </div>
         </div>
+        <div class="hero-media reveal">
+          <figure class="hero-shot">
+            <img src="Pic/启动后.png" alt="Score Monitor 正在查询并分析成绩的终端界面">
+            <figcaption class="shot-caption"><span>LIVE PROCESS / 00:59</span><span>● MONITORING</span></figcaption>
+          </figure>
+        </div>
       </div>
-    </div>
-  </div>
-</section>
+    </section>
 
-<!-- ===== FEATURES ===== -->
-<section class="section" id="features">
-  <div class="container">
-    <div class="section-header reveal">
-      <h2>每个环节都自动化</h2>
-      <p>从登录到通知，全程无需人工干预。</p>
-    </div>
-    <div class="features-grid">
-      <div class="feature-shell reveal d1">
-        <div class="feature-core">
-          <div class="icon"><i class="ri-login-circle-line"></i></div>
-          <h3>自动登录</h3>
-          <p>图形验证码 ddddocr 本地识别，识别失败自动刷新重试。</p>
-        </div>
-      </div>
-      <div class="feature-shell reveal d2">
-        <div class="feature-core">
-          <div class="icon"><i class="ri-search-eye-line"></i></div>
-          <h3>成绩查询</h3>
-          <p>自动导航到成绩页面，按学年学期查询，支持多学期配置。</p>
-        </div>
-      </div>
-      <div class="feature-shell reveal d1">
-        <div class="feature-core">
-          <div class="icon"><i class="ri-git-branch-line"></i></div>
-          <h3>智能对比</h3>
-          <p>与本地缓存对比，仅在新成绩发布或更新时触发通知。</p>
-        </div>
-      </div>
-      <div class="feature-shell reveal d2">
-        <div class="feature-core">
-          <div class="icon"><i class="ri-file-list-3-line"></i></div>
-          <h3>平时 / 卷面分</h3>
-          <p>从 VIEWSTATE 解析平时分和卷面分，成绩展示更完整。</p>
-        </div>
-      </div>
-      <div class="feature-shell reveal d1">
-        <div class="feature-core">
-          <div class="icon"><i class="ri-notification-4-line"></i></div>
-          <h3>Bark 推送</h3>
-          <p>支持 Bark 推送，新成绩实时送达 iOS 通知中心。</p>
-        </div>
-      </div>
-      <div class="feature-shell reveal d2">
-        <div class="feature-core">
-          <div class="icon"><i class="ri-timer-2-line"></i></div>
-          <h3>循环监控</h3>
-          <p>默认 5 分钟检查一轮，VPN 断线自动重连，间隔可调。</p>
-        </div>
-      </div>
-      <div class="feature-shell reveal d1">
-        <div class="feature-core">
-          <div class="icon"><i class="ri-user-switch-line"></i></div>
-          <h3>多账号切换</h3>
-          <p>通过命令行参数临时切换账号，适合管理多个学生账号。</p>
-        </div>
-      </div>
-      <div class="feature-shell reveal d2">
-        <div class="feature-core">
-          <div class="icon"><i class="ri-chrome-line"></i></div>
-          <h3>零浏览器下载</h3>
-          <p>自动复用系统 Chrome/Edge，无需额外下载浏览器内核。</p>
-        </div>
+    <div class="ticker" aria-hidden="true">
+      <div class="ticker-track">
+        <span>验证码自动识别</span><span>5 分钟循环查询</span><span>成绩变化对比</span><span>Bark 即时推送</span><span>平时分 / 卷面分解析</span>
+        <span>验证码自动识别</span><span>5 分钟循环查询</span><span>成绩变化对比</span><span>Bark 即时推送</span><span>平时分 / 卷面分解析</span>
       </div>
     </div>
-  </div>
-</section>
 
-<!-- ===== SCREENSHOTS ===== -->
-<section class="section sc-section" id="screenshots">
-  <div class="container">
-    <div class="section-header reveal">
-      <h2>界面预览</h2>
-      <p>简洁的终端界面，清晰的成绩展示，及时的推送通知。</p>
-    </div>
-    <div class="sc-grid">
-      <div class="sc-card sphone reveal d1">
-        <div class="img-wrap"><img src="Pic/Bark的key.png" alt="Bark Key 配置" loading="lazy"></div>
-        <div class="cap"><h4>Bark Key 配置</h4><p>App Store 下载 Bark，复制设备专属 Key 即可完成推送设置</p></div>
-      </div>
-      <div class="sc-card sphone reveal d2">
-        <div class="img-wrap"><img src="Pic/手机IOS接收.png" alt="iOS 推送通知" loading="lazy"></div>
-        <div class="cap"><h4>iOS 推送通知</h4><p>新成绩发布时，通过 Bark 实时推送到手机通知中心</p></div>
-      </div>
-      <div class="sc-card screen reveal d3">
-        <div class="img-wrap"><img src="Pic/启动后.png" alt="程序运行界面" loading="lazy"></div>
-        <div class="cap"><h4>程序主界面</h4><p>启动后自动登录、查询成绩，清晰展示各科分数</p></div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ===== TUTORIAL ===== -->
-<section class="section t-section" id="tutorial">
-  <div class="container">
-    <div class="section-header reveal">
-      <h2>图文教程</h2>
-      <p>下载即用，四步上手。</p>
-    </div>
-    <div class="t-steps">
-      <div class="t-step reveal d1">
-        <div class="t-step-num">1</div>
-        <div class="t-step-body">
-          <h3>下载程序</h3>
-          <p>从 <a href="https://github.com/Dvesiz/score-monitor/releases" style="color:var(--accent);text-decoration:underline">GitHub Releases</a> 下载 <code>default.exe</code>，放到任意目录。</p>
-          <div class="t-note"><i class="ri-information-line"></i><span>也可从页面顶部或底部下载按钮直接获取最新版本。</span></div>
-        </div>
-      </div>
-      <div class="t-step reveal d2">
-        <div class="t-step-num">2</div>
-        <div class="t-step-body">
-          <h3>获取 Bark Key（可选）</h3>
-          <p>如果需要手机推送通知：</p>
-          <ol>
-            <li>App Store 搜索 <strong>Bark</strong> 并安装</li>
-            <li>打开 Bark，首页网址 <code>app/</code> 之后的内容就是你的设备 Key</li>
-          </ol>
-          <div class="t-note"><i class="ri-mac-line"></i><span>不填 Bark Key 也能正常使用，成绩会在程序内显示。</span></div>
-        </div>
-      </div>
-      <div class="t-step reveal d3">
-        <div class="t-step-num">3</div>
-        <div class="t-step-body">
-          <h3>首次运行</h3>
-          <div class="t-warn"><i class="ri-error-warning-line"></i><span><strong>密码第一次必须输入正确。</strong>登录失败会自动重试，但重试 5 次后账户可能被锁定。建议先在浏览器确认密码正确再使用。</span></div>
-          <p>双击 <code>default.exe</code>，按提示输入：</p>
-          <div class="t-code">
-学号: 2021******<br>
-密码: ********<br>
-学年（如 2025-2026）[2025-2026]:<br>
-学期（1 或 2）[2]:<br>
-Bark Key（手机推送，不填则不通知）:
+    <section class="section" id="workflow">
+      <div class="shell">
+        <div class="section-intro reveal">
+          <div>
+            <p class="kicker"><span class="section-number">01</span> How it works</p>
+            <h2>从登录到提醒，<br>全部自动完成。</h2>
           </div>
-          <p>信息自动保存到 <code>config.json</code>，后续无需重复输入。</p>
+          <p>它不是另一个成绩查询页面，而是一个安静运行的监控器。配置一次账号与学期，之后只需要等待通知。</p>
+        </div>
+        <div class="process">
+          <article class="process-item reveal"><span class="process-index">01</span><h3>自动登录</h3><p>调用本地 OCR 识别图形验证码，登录失败时自动刷新验证码并重试。</p></article>
+          <article class="process-item reveal"><span class="process-index">02</span><h3>查询成绩</h3><p>进入指定学年与学期的成绩页面，同时解析总评、平时分与卷面分。</p></article>
+          <article class="process-item reveal"><span class="process-index">03</span><h3>比较变化</h3><p>与本地缓存进行比对，只在出现新成绩或已有成绩发生变化时触发通知。</p></article>
+          <article class="process-item reveal"><span class="process-index">04</span><h3>推送手机</h3><p>通过 Bark 将课程名和成绩发送至 iOS 通知中心，程序继续进行下一轮监控。</p></article>
         </div>
       </div>
-      <div class="t-step reveal d4">
-        <div class="t-step-num">4</div>
-        <div class="t-step-body">
-          <h3>后续运行</h3>
-          <p>直接双击 <code>default.exe</code> 即可自动读取配置，开始持续监控。</p>
-          <p>首次运行只会建立成绩缓存快照，不会推送通知。后续检测到新成绩或更新时才会提醒。</p>
+    </section>
+
+    <section class="section proof" id="preview">
+      <div class="shell">
+        <div class="section-intro reveal">
+          <div>
+            <p class="kicker"><span class="section-number">02</span> Real output</p>
+            <h2>看到真实结果，<br>而不是概念图。</h2>
+          </div>
+          <p>终端记录每一步查询过程；当成绩变化时，完整结果会直接出现在 Bark 历史消息里。</p>
+        </div>
+        <div class="proof-grid">
+          <figure class="proof-figure desktop reveal">
+            <img src="Pic/启动后.png" alt="程序成功登录并解析八门课程成绩的终端日志">
+            <figcaption><span>桌面端运行日志</span><b>QUERY COMPLETE</b></figcaption>
+          </figure>
+          <div class="proof-side">
+            <figure class="proof-figure phone reveal">
+              <img src="Pic/手机IOS接收.png" alt="iPhone 上收到的新成绩 Bark 推送">
+              <figcaption><span>成绩推送</span><b>iOS</b></figcaption>
+            </figure>
+            <figure class="proof-figure phone reveal">
+              <img src="Pic/Bark的key.png" alt="Bark 应用中的设备 Key 获取位置">
+              <figcaption><span>设备 Key</span><b>BARK</b></figcaption>
+            </figure>
+          </div>
+        </div>
+        <p class="proof-note">* 截图中的个人课程信息已脱敏处理。</p>
+      </div>
+    </section>
+
+    <section class="section" id="features">
+      <div class="feature-layout shell">
+        <div class="feature-lead reveal">
+          <p class="kicker"><span class="section-number">03</span> Built for focus</p>
+          <h2>少盯一次页面，<br>多做一点正事。</h2>
+          <p>所有能力都围绕一件事设计：准确发现成绩变化，然后尽快告诉你。</p>
+        </div>
+        <div class="feature-list">
+          <article class="feature-row reveal"><i class="ri-scan-2-line"></i><div><h3>本地验证码识别</h3><p>使用 ddddocr 在本机识别验证码，不调用外部识别 API。</p></div></article>
+          <article class="feature-row reveal"><i class="ri-file-chart-line"></i><div><h3>平时分与卷面分</h3><p>从 VIEWSTATE 中解析 PSCJ 与 QMCJ，并与课程总成绩合并展示。</p></div></article>
+          <article class="feature-row reveal"><i class="ri-git-compare-line"></i><div><h3>只通知真正的变化</h3><p>保存上一次成绩快照，避免每轮查询都发送重复消息。</p></div></article>
+          <article class="feature-row reveal"><i class="ri-timer-flash-line"></i><div><h3>持续监控</h3><p>默认每 5 分钟检查一次，也可通过命令行临时调整间隔。</p></div></article>
+          <article class="feature-row reveal"><i class="ri-user-shared-line"></i><div><h3>临时切换账号</h3><p>支持通过命令行参数切换学生账号，不覆盖已保存的默认配置。</p></div></article>
+          <article class="feature-row reveal"><i class="ri-chrome-line"></i><div><h3>复用现有浏览器</h3><p>优先使用系统中的 Chrome 或 Edge，无需额外下载完整浏览器。</p></div></article>
         </div>
       </div>
-    </div>
-  </div>
-</section>
+    </section>
 
-<!-- ===== COMMANDS ===== -->
-<section class="section" id="commands">
-  <div class="container">
-    <div class="section-header reveal">
-      <h2>命令参考</h2>
-      <p>多种运行模式，适应不同场景。</p>
-    </div>
-    <div class="cmd-grid">
-      <div class="cmd-item reveal d1"><code>default.exe</code><span>持续监控（5 分钟间隔）</span></div>
-      <div class="cmd-item reveal d1"><code>--once</code><span>只检查一次后退出</span></div>
-      <div class="cmd-item reveal d2"><code>--setup</code><span>重新配置账号信息</span></div>
-      <div class="cmd-item reveal d2"><code>--interval 10</code><span>临时改为 10 分钟</span></div>
-      <div class="cmd-item reveal d3"><code>--visible</code><span>显示浏览器窗口（调试）</span></div>
-      <div class="cmd-item reveal d3"><code>--id 123 --pw xxx</code><span>临时切换账号</span></div>
-    </div>
-  </div>
-</section>
+    <section class="section guide" id="guide">
+      <div class="shell">
+        <div class="section-intro reveal">
+          <div>
+            <p class="kicker"><span class="section-number">04</span> Quick setup</p>
+            <h2>四步完成配置。</h2>
+          </div>
+          <p>Windows 10 / 11 可直接运行打包版本。Bark 仅用于 iPhone 推送，不填写也能在程序中查看成绩。</p>
+        </div>
+        <div class="guide-grid">
+          <article class="guide-step reveal"><span class="guide-step-number">1</span><h3>连接校园网络</h3><p>校内连接校园网；校外先登录学校 VPN，并在监控期间保持连接。</p></article>
+          <article class="guide-step reveal"><span class="guide-step-number">2</span><h3>下载程序</h3><p>从 GitHub Releases 下载 <code>default.exe</code>，放到任意目录。</p></article>
+          <article class="guide-step reveal"><span class="guide-step-number">3</span><h3>填写配置</h3><p>首次运行时输入学号、密码、学年、学期，以及可选的 Bark Key。</p></article>
+          <article class="guide-step reveal"><span class="guide-step-number">4</span><h3>保持运行</h3><p>程序建立首次快照后进入循环监控，发现变化时自动推送。</p></article>
+        </div>
+        <div class="guide-warning reveal"><i class="ri-error-warning-line"></i><span><strong>首次密码必须输入正确。</strong>连续登录失败可能导致教务账号被临时锁定，建议先在浏览器中确认密码。</span></div>
+      </div>
+    </section>
 
-<!-- ===== DOWNLOAD ===== -->
-<section class="section" id="download">
-  <div class="container">
-    <div class="section-header reveal">
-      <h2>获取 Score Monitor</h2>
-      <p>Windows 平台，下载即用。开源免费，源码可查。</p>
-    </div>
-    <div class="dl-grid">
-      <div class="dl-shell reveal d1">
-        <div class="dl-core">
-          <div class="icon"><i class="ri-windows-line"></i></div>
-          <h3>Windows 版本</h3>
-          <p>适用于 Windows 10 / 11，单文件免安装</p>
-          <a href="https://github.com/Dvesiz/score-monitor/releases/latest/download/default.exe" class="btn btn-primary" target="_blank" rel="noopener">
-            <i class="ri-download-2-line"></i> 下载 default.exe
-          </a>
+    <section class="section" id="commands">
+      <div class="command-layout shell">
+        <div class="reveal">
+          <p class="kicker"><span class="section-number">05</span> Command line</p>
+          <h2>需要时，<br>再多控制一点。</h2>
+          <p class="lead">直接双击即可使用。下面的参数用于单次查询、重新配置或调试。</p>
+        </div>
+        <div class="commands reveal" aria-label="命令参考">
+          <div class="command-row"><code>default.exe</code><span>读取配置，按 5 分钟间隔持续监控</span></div>
+          <div class="command-row"><code>--once</code><span>只检查一次，然后退出</span></div>
+          <div class="command-row"><code>--setup</code><span>重新配置账号、学期与 Bark Key</span></div>
+          <div class="command-row"><code>--interval 10</code><span>临时将检查间隔改为 10 分钟</span></div>
+          <div class="command-row"><code>--visible</code><span>显示浏览器窗口，用于排查登录问题</span></div>
+          <div class="command-row"><code>--student-id ...</code><span>临时切换账号，不修改默认配置</span></div>
         </div>
       </div>
-      <div class="dl-shell reveal d2">
-        <div class="dl-core">
-          <div class="icon"><i class="ri-code-s-slash-line"></i></div>
-          <h3>源码运行</h3>
-          <p>Python 源码，支持自定义修改和二次开发</p>
-          <a href="https://github.com/Dvesiz/score-monitor" class="btn btn-ghost" target="_blank" rel="noopener">
-            <i class="ri-github-fill"></i> 查看源码
-          </a>
+    </section>
+
+    <section class="final-cta" id="download">
+      <div class="cta-grid shell">
+        <div>
+          <p class="kicker">Free & open source</p>
+          <h2>下一次成绩发布，<br>让通知先找到你。</h2>
+          <p>下载即用，无需安装。项目源代码公开，可自由查看和修改。</p>
+        </div>
+        <a class="button button-primary" href="https://github.com/Dvesiz/score-monitor/releases/latest/download/default.exe"><i class="ri-download-2-line"></i> 下载 Windows 版本</a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="shell">
+      <div class="footer-top">
+        <a class="brand" href="#top"><span class="brand-mark"><i class="ri-pulse-line"></i></span><span>Score Monitor</span></a>
+        <div class="footer-links">
+          <a href="https://github.com/Dvesiz/score-monitor" target="_blank" rel="noopener">GitHub</a>
+          <a href="https://github.com/Dvesiz/score-monitor/releases" target="_blank" rel="noopener">Releases</a>
+          <a href="https://github.com/Dvesiz/score-monitor/issues" target="_blank" rel="noopener">问题反馈</a>
         </div>
       </div>
+      <p class="disclaimer">© 2026 Score Monitor · MIT License · 本程序仅用于个人学习，请勿用于任何违规用途。使用本程序产生的后果由使用者自行承担。</p>
     </div>
-  </div>
-</section>
+  </footer>
 
-<!-- ===== FOOTER ===== -->
-<footer>
-  <div class="footer-inner">
-    <div class="copy">© 2026 Score Monitor · MIT License</div>
-    <div class="footer-links">
-      <a href="https://github.com/Dvesiz/score-monitor" target="_blank" rel="noopener"><i class="ri-github-fill"></i> GitHub</a>
-      <a href="https://github.com/Dvesiz/score-monitor/releases" target="_blank" rel="noopener"><i class="ri-download-2-line"></i> Releases</a>
-      <a href="https://github.com/Dvesiz/score-monitor/issues" target="_blank" rel="noopener"><i class="ri-question-line"></i> Issues</a>
-    </div>
-  </div>
-  <div class="footer-disc">本程序仅用于个人学习用途，请勿用于任何违规用途。使用本程序产生的任何后果由使用者自行承担。</div>
-</footer>
+  <script>
+    const menuButton = document.getElementById('menuButton');
+    const navLinks = document.getElementById('navLinks');
 
-<script>
-// Nav toggle
-const t=document.getElementById('navToggle'),o=document.getElementById('navOverlay');
-t.addEventListener('click',()=>{t.classList.toggle('active');o.classList.toggle('open');document.body.style.overflow=o.classList.contains('open')?'hidden':''});
-document.querySelectorAll('.nav-overlay a').forEach(a=>{a.addEventListener('click',()=>{t.classList.remove('active');o.classList.remove('open');document.body.style.overflow=''})});
+    menuButton.addEventListener('click', () => {
+      const open = navLinks.classList.toggle('is-open');
+      menuButton.setAttribute('aria-expanded', String(open));
+      menuButton.setAttribute('aria-label', open ? '关闭菜单' : '打开菜单');
+      menuButton.innerHTML = open ? '<i class="ri-close-line"></i>' : '<i class="ri-menu-3-line"></i>';
+    });
 
-// Scroll reveal
-document.querySelector('.hero-left')&&new IntersectionObserver(e=>{e.forEach(e=>{e.isIntersecting&&e.target.classList.add('visible')})},{threshold:.1,rootMargin:'0px 0px -60px 0px'}).observe(document.querySelector('.hero-left'));
-document.querySelectorAll('.reveal').forEach(el=>{el!==document.querySelector('.hero-left')&&new IntersectionObserver(entries=>{entries.forEach(e=>{e.isIntersecting&&el.classList.add('visible')})},{threshold:.1,rootMargin:'0px 0px -60px 0px'}).observe(el)});
+    navLinks.querySelectorAll('a').forEach(link => link.addEventListener('click', () => {
+      navLinks.classList.remove('is-open');
+      menuButton.setAttribute('aria-expanded', 'false');
+      menuButton.setAttribute('aria-label', '打开菜单');
+      menuButton.innerHTML = '<i class="ri-menu-3-line"></i>';
+    }));
 
-// Smooth scroll
-document.querySelectorAll('a[href^="#"]').forEach(a=>{a.addEventListener('click',e=>{const t=document.querySelector(a.getAttribute('href'));if(t){e.preventDefault();t.scrollIntoView({behavior:'smooth'})}})});
-</script>
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.08, rootMargin: '0px 0px -40px' });
+
+    document.querySelectorAll('.reveal').forEach(element => observer.observe(element));
+
+    window.setTimeout(() => {
+      document.querySelectorAll('.reveal').forEach(element => element.classList.add('is-visible'));
+    }, 900);
+  </script>
 </body>
 </html>
