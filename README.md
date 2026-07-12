@@ -2,6 +2,8 @@
 
 > 自动监控正方教务系统成绩发布，检测到新成绩时通过 Bark(IOS端） 推送通知到手机。
 
+介绍页：https://dvesiz.github.io/score-monitor/
+
 ## 功能
 
 | 功能 | 说明 |
